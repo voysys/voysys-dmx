@@ -10,9 +10,6 @@ use eframe::egui;
 use eframe::egui::color_picker::color_edit_button_srgb;
 
 fn main() -> Result<(), eframe::Error> {
-    // Log to stdout (if you run with `RUST_LOG=debug`).
-    tracing_subscriber::fmt::init();
-
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
@@ -20,12 +17,12 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Voysys DMX controller",
         options,
-        Box::new(|_cc| Box::new(MyApp::default())),
+        Box::new(|_cc| Box::<MyApp>::default()),
     )
 }
 
 fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
-    match TcpStream::connect("localhost:3333") {
+    match TcpStream::connect("10.0.2.124:3333") {
         Ok(mut stream) => {
             println!("Successfully connected to server in port 3333");
             while run.load(Ordering::SeqCst) {
@@ -34,7 +31,7 @@ fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
                         msg.rgb[0], msg.rgb[1], msg.rgb[2], msg.white, msg.amber, msg.uv,
                     ];
 
-                    stream.write(&data).unwrap();
+                    stream.write_all(&data).unwrap();
                 }
             }
         }

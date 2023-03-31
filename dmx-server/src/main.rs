@@ -10,10 +10,6 @@ use std::{
 struct Color(u8, u8, u8, u8, u8, u8);
 
 impl Color {
-    fn new(r: u8, g: u8, b: u8) -> Self {
-        Color(r, g, b, 0, 0, 0)
-    }
-
     fn dmx(self) -> [u8; 12] {
         [
             self.0, self.1, self.2, self.3, self.4, self.5, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
@@ -51,7 +47,7 @@ fn dmx(leds: &[Color; 5]) -> [u8; 60] {
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let mut data = [0 as u8; 6]; // using 50 byte buffer
+    let mut data = [0_u8; 6]; // using 50 byte buffer
     let mut ports = available_ports().unwrap();
     let port = &mut ports[1];
     port.open().unwrap();
