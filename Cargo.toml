@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "dmx-client",
+    "dmx-server"
+]
