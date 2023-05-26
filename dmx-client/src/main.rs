@@ -170,10 +170,11 @@ impl eframe::App for MyApp {
                         .clamp_range(0.0..=1.0)
                         .speed(0.01)
                         .ui(ui);
-                });
-                ui.horizontal(|ui| {
                     ui.label("Offset");
-                    DragValue::new(&mut timeline.offset).speed(0.01).ui(ui);
+                    DragValue::new(&mut timeline.offset)
+                        .clamp_range(0.0..=1000.0)
+                        .speed(1.0)
+                        .ui(ui);
                 });
 
                 timeline.color.rgb[0] = (timeline.red.ui(ui, self.time + timeline.offset)

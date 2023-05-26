@@ -55,20 +55,32 @@ impl ChannelWidget {
         let control_point_radius = 5.0;
         let points = self.control_points.len();
 
-        for (point, i) in &mut self.control_points {
+        let mut first_edited = false;
+        let mut last_edited = false;
+
+        for (index, (point, id)) in self.control_points.iter_mut().enumerate() {
             let size = Vec2::splat(2.0 * control_point_radius);
 
             let point_in_screen = to_screen.transform_pos(*point);
             let point_rect = Rect::from_center_size(point_in_screen, size);
-            let point_id = response.id.with(*i);
+            let point_id = response.id.with(*id);
             let point_response = ui.interact(point_rect, point_id, Sense::click_and_drag());
 
             let mut delta = point_response.drag_delta();
 
-            if *i == 0 || *i == points as i32 - 1 {
+            if point_response.dragged() {
+                if index == 0 {
+                    first_edited = true;
+                }
+                if index == points - 1 {
+                    last_edited = true;
+                }
+            }
+
+            if index == 0 || index == points - 1 {
                 delta.x = 0.0;
             } else if point_response.clicked_by(PointerButton::Secondary) {
-                remove_list.push(*i);
+                remove_list.push(*id);
             }
 
             *point += delta;
@@ -84,12 +96,25 @@ impl ChannelWidget {
             ));
         }
 
+        let len = self.control_points.len();
+
+        if first_edited {
+            self.control_points[len - 1].0.y = self.control_points[0].0.y;
+        }
+
+        if last_edited {
+            self.control_points[0].0.y = self.control_points[len - 1].0.y;
+        }
+
         for i in remove_list {
             self.control_points.retain_mut(|(_, j)| i != *j);
         }
 
         self.control_points
             .sort_by(|a, b| ((a.0.x * 1000.0) as i32).cmp(&((b.0.x * 1000.0) as i32)));
+
+        self.control_points[0].0.x = 0.0;
+        self.control_points[len - 1].0.x = 1000.0;
 
         let mut before = Pos2::new(0.0, 100.0);
         let mut after = Pos2::new(1000.0, 100.0);
