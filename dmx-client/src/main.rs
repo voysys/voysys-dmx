@@ -178,7 +178,7 @@ impl eframe::App for MyApp {
                 let mut after = Pos2::new(1000.0, 100.0);
 
                 for points in self.control_points.windows(2) {
-                    if points[0].0.x < self.time && points[1].0.x > self.time {
+                    if points[0].0.x <= self.time && points[1].0.x > self.time {
                         before = points[0].0;
                         after = points[1].0;
                     }
@@ -192,6 +192,10 @@ impl eframe::App for MyApp {
                 let x = self.time;
                 let y = before.y * (1.0 - ratio) + after.y * ratio;
 
+                let value = 1.0 - y / 100.0;
+
+                self.colors.rgb[0] = (value * 255.0) as u8;
+
                 let pos = to_screen * Pos2::new(x, y);
 
                 painter.add(Shape::circle_stroke(
@@ -199,6 +203,8 @@ impl eframe::App for MyApp {
                     control_point_radius,
                     Stroke::new(1.0, Color32::RED.linear_multiply(0.25)),
                 ));
+
+                send |= true;
             }
 
             {
