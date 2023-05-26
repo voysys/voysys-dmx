@@ -181,13 +181,24 @@ impl eframe::App for MyApp {
                     if points[0].0.x < self.time && points[1].0.x > self.time {
                         before = points[0].0;
                         after = points[1].0;
-                    }  
+                    }
                 }
 
-                println!(
-                    "{:?} {:?}, {:?}: {:?}",
-                    before, after, &self.control_points, self.time
-                );
+                let range = after.x - before.x;
+                let pos = self.time - before.x;
+
+                let ratio = pos / range;
+
+                let x = self.time;
+                let y = before.y * (1.0 - ratio) + after.y * ratio;
+
+                let pos = to_screen * Pos2::new(x, y);
+
+                painter.add(Shape::circle_stroke(
+                    pos,
+                    control_point_radius,
+                    Stroke::new(1.0, Color32::RED.linear_multiply(0.25)),
+                ));
             }
 
             {
