@@ -6,10 +6,13 @@ use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use channel::ChannelWidget;
 use eframe::egui::color_picker::color_edit_button_srgb;
 use eframe::egui::{DragValue, Sense, Widget};
 use eframe::epaint::{self, Color32, PathShape, Pos2, Rect, Shape, Stroke, Vec2};
 use eframe::{egui, emath};
+
+mod channel;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
@@ -58,8 +61,9 @@ struct MyApp {
     run: Arc<AtomicBool>,
     tx: Sender<DmxColor>,
 
-    next_id: i32,
-    control_points: Vec<(Pos2, i32)>,
+    red: ChannelWidget,
+    green: ChannelWidget,
+    blue: ChannelWidget,
 
     last_frame_time: Instant,
     time: f32,
@@ -81,12 +85,9 @@ impl Default for MyApp {
             tcp_thread,
             tx,
             run,
-            next_id: 3,
-            control_points: vec![
-                (Pos2::new(0.0, 0.0), 0),
-                (Pos2::new(100.0, 64.0), 1),
-                (Pos2::new(1000.0, 0.0), 2),
-            ],
+            red: ChannelWidget::new(),
+            green: ChannelWidget::new(),
+            blue: ChannelWidget::new(),
             last_frame_time: Instant::now(),
             time: 0.0,
             speed: 10.0,
@@ -116,127 +117,16 @@ impl eframe::App for MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             DragValue::new(&mut self.speed).speed(0.01).ui(ui);
 
-            let mut send = false;
-            send |= color_edit_button_srgb(ui, &mut self.colors.rgb).changed();
-            send |= ui
-                .add(egui::Slider::new(&mut self.colors.white, 0..=255).text("White"))
-                .changed();
-            send |= ui
-                .add(egui::Slider::new(&mut self.colors.amber, 0..=255).text("Amber"))
-                .changed();
-            send |= ui
-                .add(egui::Slider::new(&mut self.colors.uv, 0..=255).text("UV"))
-                .changed();
+            color_edit_button_srgb(ui, &mut self.colors.rgb).changed();
+            ui.add(egui::Slider::new(&mut self.colors.white, 0..=255).text("White"));
+            ui.add(egui::Slider::new(&mut self.colors.amber, 0..=255).text("Amber"));
+            ui.add(egui::Slider::new(&mut self.colors.uv, 0..=255).text("UV"));
 
-            if ui.button("Add Point").clicked() {
-                self.control_points
-                    .push((Pos2::new(10.0, 0.0), self.next_id));
-                self.next_id += 1;
-            }
+            self.colors.rgb[0] = (self.red.ui(ui, self.time) * 255.0) as u8;
+            self.colors.rgb[1] = (self.green.ui(ui, self.time) * 255.0) as u8;
+            self.colors.rgb[2] = (self.blue.ui(ui, self.time) * 255.0) as u8;
 
-            let (response, painter) = ui.allocate_painter(Vec2::new(1000.0, 100.0), Sense::hover());
-
-            painter.add(epaint::RectShape::stroke(
-                response.rect,
-                0.0,
-                Stroke::new(2.0, Color32::LIGHT_GREEN.linear_multiply(0.25)),
-            ));
-
-            let to_screen = emath::RectTransform::from_to(
-                Rect::from_min_size(Pos2::ZERO, response.rect.size()),
-                response.rect,
-            );
-
-            let control_point_radius = 5.0;
-
-            let control_point_shapes: Vec<Shape> = self
-                .control_points
-                .iter_mut()
-                .map(|(point, i)| {
-                    let size = Vec2::splat(2.0 * control_point_radius);
-
-                    let point_in_screen = to_screen.transform_pos(*point);
-                    let point_rect = Rect::from_center_size(point_in_screen, size);
-                    let point_id = response.id.with(*i);
-                    let point_response = ui.interact(point_rect, point_id, Sense::drag());
-
-                    *point += point_response.drag_delta();
-                    *point = to_screen.from().clamp(*point);
-
-                    let point_in_screen = to_screen.transform_pos(*point);
-                    let stroke = ui.style().interact(&point_response).fg_stroke;
-
-                    Shape::circle_stroke(point_in_screen, control_point_radius, stroke)
-                })
-                .collect();
-
-            self.control_points
-                .sort_by(|a, b| ((a.0.x * 1000.0) as i32).cmp(&((b.0.x * 1000.0) as i32)));
-
-            {
-                let mut before = Pos2::new(0.0, 100.0);
-                let mut after = Pos2::new(1000.0, 100.0);
-
-                for points in self.control_points.windows(2) {
-                    if points[0].0.x <= self.time && points[1].0.x > self.time {
-                        before = points[0].0;
-                        after = points[1].0;
-                    }
-                }
-
-                let range = after.x - before.x;
-                let pos = self.time - before.x;
-
-                let ratio = pos / range;
-
-                let x = self.time;
-                let y = before.y * (1.0 - ratio) + after.y * ratio;
-
-                let value = 1.0 - y / 100.0;
-
-                self.colors.rgb[0] = (value * 255.0) as u8;
-
-                let pos = to_screen * Pos2::new(x, y);
-
-                painter.add(Shape::circle_stroke(
-                    pos,
-                    control_point_radius,
-                    Stroke::new(1.0, Color32::RED.linear_multiply(0.25)),
-                ));
-
-                send |= true;
-            }
-
-            {
-                let points_in_screen: Vec<Pos2> = self
-                    .control_points
-                    .iter()
-                    .map(|p| to_screen * p.0)
-                    .collect();
-                painter.add(PathShape::line(
-                    points_in_screen,
-                    Stroke::new(1.0, Color32::RED.linear_multiply(0.25)),
-                ));
-            }
-
-            {
-                let points_in_screen: Vec<Pos2> =
-                    [Pos2::new(self.time, 0.0), Pos2::new(self.time, 100.0)]
-                        .iter()
-                        .map(|p| to_screen * *p)
-                        .collect();
-
-                painter.add(PathShape::line(
-                    points_in_screen,
-                    Stroke::new(2.0, Color32::WHITE.linear_multiply(0.25)),
-                ));
-            }
-
-            painter.extend(control_point_shapes);
-
-            if send {
-                self.tx.send(self.colors.clone()).ok();
-            }
+            self.tx.send(self.colors.clone()).ok();
         });
     }
 }
