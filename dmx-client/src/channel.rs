@@ -63,6 +63,8 @@ impl ChannelWidget {
             let point_response = ui.interact(point_rect, point_id, Sense::click_and_drag());
 
             *point += point_response.drag_delta();
+
+            
             *point = to_screen.from().clamp(*point);
 
             if point_response.clicked_by(PointerButton::Secondary) {
