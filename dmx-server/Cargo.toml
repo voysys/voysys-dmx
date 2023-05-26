@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 rust_dmx = { git = "https://github.com/JoNil/rust-dmx.git" }
+zerocopy = "0.6"

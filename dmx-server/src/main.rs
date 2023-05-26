@@ -5,23 +5,47 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
+use zerocopy::FromBytes;
 
-#[derive(Copy, Clone, Default)]
-struct Color(u8, u8, u8, u8, u8, u8);
+#[derive(Debug, Default, Copy, Clone, FromBytes)]
+#[repr(C)]
+struct DmxMessage {
+    channels: [DmxColor; 5],
+}
 
-impl Color {
+#[derive(Debug, Default, Copy, Clone, FromBytes)]
+#[repr(C)]
+struct DmxColor {
+    rgb: [u8; 3],
+    white: u8,
+    amber: u8,
+    uv: u8,
+}
+
+impl DmxColor {
     fn dmx(self) -> [u8; 12] {
         [
-            self.0, self.1, self.2, self.3, self.4, self.5, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+            self.rgb[0],
+            self.rgb[1],
+            self.rgb[2],
+            self.white,
+            self.amber,
+            self.uv,
+            0xff,
+            0xff,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
         ]
     }
 }
 
-fn dmx(leds: &[Color; 5]) -> [u8; 60] {
+fn dmx(msg: &DmxMessage) -> [u8; 60] {
     let mut output = [0; 60];
 
-    for i in 0..leds.len() {
-        let color = leds[i];
+    for i in 0..msg.channels.len() {
+        let color = msg.channels[i];
 
         output[(12 * i)..(12 * (i + 1))].copy_from_slice(&color.dmx());
     }
@@ -30,24 +54,16 @@ fn dmx(leds: &[Color; 5]) -> [u8; 60] {
 }
 
 fn handle_client(mut stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
-    let mut data = [0_u8; 6]; // using 50 byte buffer
+    let mut data = [0_u8; 6 * 5];
 
-    while match stream.read(&mut data) {
-        Ok(size) => {
-            if size > 0 {
-                println!("{size} {data:?}");
-                let mut leds = [Color::default(); 5];
-                leds[0] = Color(data[0], data[1], data[2], data[3], data[4], data[5]);
-                leds[1] = leds[0];
-                leds[2] = leds[0];
-                leds[3] = leds[0];
-                leds[4] = leds[0];
-
-                {
-                    let mut handle = handle.lock().unwrap();
-                    handle.port.write(&dmx(&leds)).unwrap();
-                }
+    while match stream.read_exact(&mut data) {
+        Ok(()) => {
+            let msg = DmxMessage::read_from(data.as_slice()).unwrap();
+            {
+                let mut handle = handle.lock().unwrap();
+                handle.port.write(&dmx(&msg)).unwrap();
             }
+
             true
         }
         Err(_) => {

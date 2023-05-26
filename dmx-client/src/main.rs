@@ -1,5 +1,5 @@
 use channel::ChannelWidget;
-use eframe::egui::{self, color_picker::color_edit_button_srgb, DragValue, Widget};
+use eframe::egui::{self, DragValue, Widget};
 use std::{
     io::Write,
     net::TcpStream,
@@ -11,6 +11,7 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
+use zerocopy::AsBytes;
 
 mod channel;
 
@@ -26,17 +27,14 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
-fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
+fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
     match TcpStream::connect("10.0.11.3:33333") {
         Ok(mut stream) => {
             println!("Successfully connected to server in port 33333");
             while run.load(Ordering::SeqCst) {
                 if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
-                    let data = [
-                        msg.rgb[0], msg.rgb[1], msg.rgb[2], msg.white, msg.amber, msg.uv,
-                    ];
-
-                    stream.write_all(&data).unwrap();
+                    let data = msg.as_bytes();
+                    let message = stream.write_all(data).unwrap();
                 }
             }
         }
@@ -47,7 +45,14 @@ fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
     println!("Closing TCP Thread.");
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Copy, Clone, AsBytes)]
+#[repr(C)]
+struct DmxMessage {
+    channels: [DmxColor; 5],
+}
+
+#[derive(Debug, Default, Copy, Clone, AsBytes)]
+#[repr(C)]
 struct DmxColor {
     rgb: [u8; 3],
     white: u8,
@@ -55,19 +60,36 @@ struct DmxColor {
     uv: u8,
 }
 
-struct MyApp {
-    colors: DmxColor,
-    tcp_thread: Option<JoinHandle<()>>,
-    run: Arc<AtomicBool>,
-    tx: Sender<DmxColor>,
-
+struct Timeline {
+    id: i8,
     red: ChannelWidget,
     green: ChannelWidget,
     blue: ChannelWidget,
+    color: DmxColor,
+}
+
+impl Timeline {
+    fn new(id: i8) -> Self {
+        Self {
+            id,
+            red: ChannelWidget::new(),
+            green: ChannelWidget::new(),
+            blue: ChannelWidget::new(),
+            color: DmxColor::default(),
+        }
+    }
+}
+
+struct MyApp {
+    tcp_thread: Option<JoinHandle<()>>,
+    run: Arc<AtomicBool>,
+    tx: Sender<DmxMessage>,
 
     last_frame_time: Instant,
     time: f32,
     cycle_length: f32,
+    timelines: Vec<Timeline>,
+    lights: [i32; 5],
 }
 
 impl Default for MyApp {
@@ -81,16 +103,14 @@ impl Default for MyApp {
         };
 
         Self {
-            colors: DmxColor::default(),
             tcp_thread,
-            tx,
             run,
-            red: ChannelWidget::new(),
-            green: ChannelWidget::new(),
-            blue: ChannelWidget::new(),
+            tx,
             last_frame_time: Instant::now(),
             time: 0.0,
             cycle_length: 5.0,
+            timelines: vec![Timeline::new(1)],
+            lights: [0, 1, 2, 3, 4],
         }
     }
 }
@@ -116,19 +136,35 @@ impl eframe::App for MyApp {
             self.time = 0.0;
         }
 
+        self.timelines.retain(|timeline| timeline.id > -1);
+
         egui::CentralPanel::default().show(ctx, |ui| {
             DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
 
-            color_edit_button_srgb(ui, &mut self.colors.rgb).changed();
-            ui.add(egui::Slider::new(&mut self.colors.white, 0..=255).text("White"));
-            ui.add(egui::Slider::new(&mut self.colors.amber, 0..=255).text("Amber"));
-            ui.add(egui::Slider::new(&mut self.colors.uv, 0..=255).text("UV"));
+            if ui.button("Add track").clicked() {
+                self.timelines
+                    .push(Timeline::new(self.timelines.len() as i8))
+            }
 
-            self.colors.rgb[0] = (self.red.ui(ui, self.time) * 255.0) as u8;
-            self.colors.rgb[1] = (self.green.ui(ui, self.time) * 255.0) as u8;
-            self.colors.rgb[2] = (self.blue.ui(ui, self.time) * 255.0) as u8;
+            for (timeline) in &mut self.timelines.iter_mut() {
+                timeline.color.rgb[0] = (timeline.red.ui(ui, self.time) * 255.0) as u8;
+                timeline.color.rgb[1] = (timeline.green.ui(ui, self.time) * 255.0) as u8;
+                timeline.color.rgb[2] = (timeline.blue.ui(ui, self.time) * 255.0) as u8;
+                if ui.button("delete track").clicked() {
+                    timeline.id = -1;
+                }
+                ui.add(egui::Separator::default());
+            }
 
-            self.tx.send(self.colors.clone()).ok();
+            let mut res = DmxMessage::default();
+
+            for (i, light) in self.lights.iter().copied().enumerate() {
+                if let Some(timeline) = self.timelines.get(light as usize) {
+                    res.channels[i] = timeline.color;
+                }
+            }
+
+            self.tx.send(res).ok();
         });
     }
 }
