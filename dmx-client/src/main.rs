@@ -1,6 +1,11 @@
 use channel::ChannelWidget;
-use eframe::egui::{self, DragValue, Slider, Widget};
+use eframe::{
+    egui::{self, DragValue, Slider, Widget},
+    Storage,
+};
+use serde::{Deserialize, Serialize};
 use std::{
+    fs,
     io::Write,
     net::TcpStream,
     sync::{
@@ -20,10 +25,26 @@ fn main() -> Result<(), eframe::Error> {
         initial_window_size: Some(egui::vec2(1024.0, 800.0)),
         ..Default::default()
     };
+
+    let state = fs::read_to_string("state.json")
+        .ok()
+        .and_then(|s| serde_json::from_str::<State>(&s).ok())
+        .unwrap_or(State {
+            cycle_length: 5.0,
+            timelines: vec![
+                Timeline::new(0),
+                Timeline::new(1),
+                Timeline::new(2),
+                Timeline::new(3),
+                Timeline::new(4),
+            ],
+            lights: [0, 1, 2, 3, 4],
+        });
+
     eframe::run_native(
         "Voysys DMX controller",
         options,
-        Box::new(|_cc| Box::<MyApp>::default()),
+        Box::new(|_cc| Box::new(App::new(state))),
     )
 }
 
@@ -45,13 +66,13 @@ fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
     println!("Closing TCP Thread.");
 }
 
-#[derive(Debug, Default, Copy, Clone, AsBytes)]
+#[derive(Debug, Default, Copy, Clone, AsBytes, Serialize, Deserialize)]
 #[repr(C)]
 struct DmxMessage {
     channels: [DmxColor; 5],
 }
 
-#[derive(Debug, Default, Copy, Clone, AsBytes)]
+#[derive(Debug, Default, Copy, Clone, AsBytes, Serialize, Deserialize)]
 #[repr(C)]
 struct DmxColor {
     rgb: [u8; 3],
@@ -60,6 +81,7 @@ struct DmxColor {
     uv: u8,
 }
 
+#[derive(Serialize, Deserialize)]
 struct Timeline {
     id: i8,
     red: ChannelWidget,
@@ -84,20 +106,25 @@ impl Timeline {
     }
 }
 
-struct MyApp {
+#[derive(Serialize, Deserialize)]
+struct State {
+    cycle_length: f32,
+    timelines: Vec<Timeline>,
+    lights: [i32; 5],
+}
+
+struct App {
     tcp_thread: Option<JoinHandle<()>>,
     run: Arc<AtomicBool>,
     tx: Sender<DmxMessage>,
 
     last_frame_time: Instant,
     time: f32,
-    cycle_length: f32,
-    timelines: Vec<Timeline>,
-    lights: [i32; 5],
+    state: State,
 }
 
-impl Default for MyApp {
-    fn default() -> Self {
+impl App {
+    fn new(state: State) -> Self {
         let (tx, rx) = mpsc::channel();
         let run = Arc::new(AtomicBool::new(true));
 
@@ -112,20 +139,12 @@ impl Default for MyApp {
             tx,
             last_frame_time: Instant::now(),
             time: 0.0,
-            cycle_length: 5.0,
-            timelines: vec![
-                Timeline::new(0),
-                Timeline::new(1),
-                Timeline::new(2),
-                Timeline::new(3),
-                Timeline::new(4),
-            ],
-            lights: [0, 1, 2, 3, 4],
+            state,
         }
     }
 }
 
-impl eframe::App for MyApp {
+impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint();
 
@@ -138,7 +157,7 @@ impl eframe::App for MyApp {
             dt
         };
 
-        let speed = 1000.0 / self.cycle_length;
+        let speed = 1000.0 / self.state.cycle_length;
 
         self.time += speed * dt;
 
@@ -146,24 +165,27 @@ impl eframe::App for MyApp {
             self.time = 0.0;
         }
 
-        self.timelines.retain(|timeline| timeline.id > -1);
+        self.state.timelines.retain(|timeline| timeline.id > -1);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Cycle");
-                DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
+                DragValue::new(&mut self.state.cycle_length)
+                    .speed(0.01)
+                    .ui(ui);
             });
 
-            for i in &mut self.lights.iter_mut() {
-                Slider::new(i, 0..=(self.timelines.len() as i32 - 1)).ui(ui);
+            for i in &mut self.state.lights.iter_mut() {
+                Slider::new(i, 0..=(self.state.timelines.len() as i32 - 1)).ui(ui);
             }
 
             if ui.button("Add track").clicked() {
-                self.timelines
-                    .push(Timeline::new(self.timelines.len() as i8))
+                self.state
+                    .timelines
+                    .push(Timeline::new(self.state.timelines.len() as i8))
             }
 
-            for timeline in &mut self.timelines.iter_mut() {
+            for timeline in &mut self.state.timelines.iter_mut() {
                 ui.horizontal(|ui| {
                     ui.label("Gain");
                     DragValue::new(&mut timeline.gain)
@@ -194,8 +216,8 @@ impl eframe::App for MyApp {
 
             let mut res = DmxMessage::default();
 
-            for (i, light) in self.lights.iter().copied().enumerate() {
-                if let Some(timeline) = self.timelines.get(light as usize) {
+            for (i, light) in self.state.lights.iter().copied().enumerate() {
+                if let Some(timeline) = self.state.timelines.get(light as usize) {
                     res.channels[i] = timeline.color;
                 }
             }
@@ -203,9 +225,14 @@ impl eframe::App for MyApp {
             self.tx.send(res).ok();
         });
     }
+
+    fn save(&mut self, _storage: &mut dyn Storage) {
+        let s = serde_json::to_string(&self.state).unwrap();
+        fs::write("state.json", s).ok();
+    }
 }
 
-impl Drop for MyApp {
+impl Drop for App {
     fn drop(&mut self) {
         self.run.store(false, Ordering::SeqCst);
         if let Some(thread) = self.tcp_thread.take() {

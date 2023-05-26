@@ -3,7 +3,9 @@ use eframe::{
     emath,
     epaint::{self, Color32, PathShape, Pos2, Rect, Shape, Stroke, Vec2},
 };
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct ChannelWidget {
     next_id: i32,
     control_points: Vec<(Pos2, i32)>,
@@ -96,14 +98,16 @@ impl ChannelWidget {
             ));
         }
 
-        let len = self.control_points.len();
+        {
+            let len: usize = self.control_points.len();
 
-        if first_edited {
-            self.control_points[len - 1].0.y = self.control_points[0].0.y;
-        }
+            if first_edited {
+                self.control_points[len - 1].0.y = self.control_points[0].0.y;
+            }
 
-        if last_edited {
-            self.control_points[0].0.y = self.control_points[len - 1].0.y;
+            if last_edited {
+                self.control_points[0].0.y = self.control_points[len - 1].0.y;
+            }
         }
 
         for i in remove_list {
@@ -113,8 +117,11 @@ impl ChannelWidget {
         self.control_points
             .sort_by(|a, b| ((a.0.x * 1000.0) as i32).cmp(&((b.0.x * 1000.0) as i32)));
 
-        self.control_points[0].0.x = 0.0;
-        self.control_points[len - 1].0.x = 1000.0;
+        {
+            let len = self.control_points.len();
+            self.control_points[0].0.x = 0.0;
+            self.control_points[len - 1].0.x = 1000.0;
+        }
 
         let mut before = Pos2::new(0.0, 100.0);
         let mut after = Pos2::new(1000.0, 100.0);
