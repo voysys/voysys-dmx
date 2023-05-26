@@ -103,7 +103,7 @@ impl ChannelWidget {
                 .collect();
             painter.add(PathShape::line(
                 points_in_screen,
-                Stroke::new(1.0, Color32::RED.linear_multiply(0.25)),
+                Stroke::new(2.0, Color32::RED.linear_multiply(0.25)),
             ));
         }
 

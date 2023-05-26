@@ -27,7 +27,7 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
-    match TcpStream::connect("127.0.0.1:33333") {
+    match TcpStream::connect("10.0.11.3:33333") {
         Ok(mut stream) => {
             println!("Successfully connected to server in port 33333");
             while run.load(Ordering::SeqCst) {
