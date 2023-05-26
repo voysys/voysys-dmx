@@ -67,7 +67,7 @@ struct MyApp {
 
     last_frame_time: Instant,
     time: f32,
-    speed: f32,
+    cycle_length: f32,
 }
 
 impl Default for MyApp {
@@ -90,7 +90,7 @@ impl Default for MyApp {
             blue: ChannelWidget::new(),
             last_frame_time: Instant::now(),
             time: 0.0,
-            speed: 10.0,
+            cycle_length: 5.0,
         }
     }
 }
@@ -108,14 +108,16 @@ impl eframe::App for MyApp {
             dt
         };
 
-        self.time += self.speed * dt;
+        let speed = 1000.0 / self.cycle_length;
+
+        self.time += speed * dt;
 
         if self.time > 1000.0 {
             self.time = 0.0;
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            DragValue::new(&mut self.speed).speed(0.01).ui(ui);
+            DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
 
             color_edit_button_srgb(ui, &mut self.colors.rgb).changed();
             ui.add(egui::Slider::new(&mut self.colors.white, 0..=255).text("White"));
