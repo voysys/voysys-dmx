@@ -1,16 +1,16 @@
-use std::io::Write;
-use std::net::TcpStream;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc};
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
-
 use channel::ChannelWidget;
-use eframe::egui::color_picker::color_edit_button_srgb;
-use eframe::egui::{DragValue, Sense, Widget};
-use eframe::epaint::{self, Color32, PathShape, Pos2, Rect, Shape, Stroke, Vec2};
-use eframe::{egui, emath};
+use eframe::egui::{self, color_picker::color_edit_button_srgb, DragValue, Widget};
+use std::{
+    io::Write,
+    net::TcpStream,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, Sender},
+        Arc,
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
 
 mod channel;
 

@@ -1,5 +1,5 @@
 use eframe::{
-    egui::{Sense, Ui},
+    egui::{PointerButton, Sense, Ui},
     emath,
     epaint::{self, Color32, PathShape, Pos2, Rect, Shape, Stroke, Vec2},
 };
@@ -22,16 +22,23 @@ impl ChannelWidget {
     }
 
     pub fn ui(&mut self, ui: &mut Ui, time: f32) -> f32 {
-        let (response, painter) = ui.allocate_painter(Vec2::new(1000.0, 100.0), Sense::hover());
+        let (response, painter) = ui.allocate_painter(Vec2::new(1000.0, 100.0), Sense::click());
 
         let to_screen = emath::RectTransform::from_to(
             Rect::from_min_size(Pos2::ZERO, response.rect.size()),
             response.rect,
         );
 
-        if ui.button("Add Point").clicked() {
+        let to_painter = emath::RectTransform::from_to(
+            response.rect,
+            Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        );
+
+        if response.clicked() {
+            let pos = response.hover_pos().unwrap();
+
             self.control_points
-                .push((Pos2::new(10.0, 0.0), self.next_id));
+                .push((to_painter.transform_pos(pos), self.next_id));
             self.next_id += 1;
         }
 
@@ -41,6 +48,8 @@ impl ChannelWidget {
             Stroke::new(2.0, Color32::LIGHT_GREEN.linear_multiply(0.25)),
         ));
 
+        let mut remove_list = Vec::new();
+
         let control_point_radius = 5.0;
 
         for (point, i) in &mut self.control_points {
@@ -49,10 +58,14 @@ impl ChannelWidget {
             let point_in_screen = to_screen.transform_pos(*point);
             let point_rect = Rect::from_center_size(point_in_screen, size);
             let point_id = response.id.with(*i);
-            let point_response = ui.interact(point_rect, point_id, Sense::drag());
+            let point_response = ui.interact(point_rect, point_id, Sense::click_and_drag());
 
             *point += point_response.drag_delta();
             *point = to_screen.from().clamp(*point);
+
+            if point_response.clicked_by(PointerButton::Secondary) {
+                remove_list.push(*i);
+            }
 
             let point_in_screen = to_screen.transform_pos(*point);
             let stroke = ui.style().interact(&point_response).fg_stroke;
@@ -62,6 +75,10 @@ impl ChannelWidget {
                 control_point_radius,
                 stroke,
             ));
+        }
+
+        for i in remove_list {
+            self.control_points.retain_mut(|(_, j)| i != *j);
         }
 
         self.control_points
