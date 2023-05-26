@@ -1789,8 +1789,7 @@ checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 [[package]]
 name = "rust_dmx"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9edc41823529002d639e8a072da65224c9ee2248415c28e402c869b2769593e"
+source = "git+https://github.com/JoNil/rust-dmx.git#dce39aa6b124a1dd244f3c0fa588530daac94faa"
 dependencies = [
  "derive_more",
  "serde",
