@@ -1,5 +1,5 @@
 use channel::ChannelWidget;
-use eframe::egui::{self, DragValue, Widget};
+use eframe::egui::{self, DragValue, Slider, Widget};
 use std::{
     io::Write,
     net::TcpStream,
@@ -34,7 +34,7 @@ fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
             while run.load(Ordering::SeqCst) {
                 if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
                     let data = msg.as_bytes();
-                    let message = stream.write_all(data).unwrap();
+                    stream.write_all(data).unwrap();
                 }
             }
         }
@@ -66,6 +66,8 @@ struct Timeline {
     green: ChannelWidget,
     blue: ChannelWidget,
     color: DmxColor,
+    gain: f32,
+    offset: f32,
 }
 
 impl Timeline {
@@ -76,6 +78,8 @@ impl Timeline {
             green: ChannelWidget::new(),
             blue: ChannelWidget::new(),
             color: DmxColor::default(),
+            gain: 1.0,
+            offset: 0.0,
         }
     }
 }
@@ -109,7 +113,13 @@ impl Default for MyApp {
             last_frame_time: Instant::now(),
             time: 0.0,
             cycle_length: 5.0,
-            timelines: vec![Timeline::new(1)],
+            timelines: vec![
+                Timeline::new(0),
+                Timeline::new(1),
+                Timeline::new(2),
+                Timeline::new(3),
+                Timeline::new(4),
+            ],
             lights: [0, 1, 2, 3, 4],
         }
     }
@@ -139,17 +149,42 @@ impl eframe::App for MyApp {
         self.timelines.retain(|timeline| timeline.id > -1);
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
+            ui.horizontal(|ui| {
+                ui.label("Cycle");
+                DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
+            });
+
+            for i in &mut self.lights.iter_mut() {
+                Slider::new(i, 0..=(self.timelines.len() as i32 - 1)).ui(ui);
+            }
 
             if ui.button("Add track").clicked() {
                 self.timelines
                     .push(Timeline::new(self.timelines.len() as i8))
             }
 
-            for (timeline) in &mut self.timelines.iter_mut() {
-                timeline.color.rgb[0] = (timeline.red.ui(ui, self.time) * 255.0) as u8;
-                timeline.color.rgb[1] = (timeline.green.ui(ui, self.time) * 255.0) as u8;
-                timeline.color.rgb[2] = (timeline.blue.ui(ui, self.time) * 255.0) as u8;
+            for timeline in &mut self.timelines.iter_mut() {
+                ui.horizontal(|ui| {
+                    ui.label("Gain");
+                    DragValue::new(&mut timeline.gain)
+                        .clamp_range(0.0..=1.0)
+                        .speed(0.01)
+                        .ui(ui);
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Offset");
+                    DragValue::new(&mut timeline.offset).speed(0.01).ui(ui);
+                });
+
+                timeline.color.rgb[0] = (timeline.red.ui(ui, self.time + timeline.offset)
+                    * timeline.gain
+                    * 255.0) as u8;
+                timeline.color.rgb[1] = (timeline.green.ui(ui, self.time + timeline.offset)
+                    * timeline.gain
+                    * 255.0) as u8;
+                timeline.color.rgb[2] = (timeline.blue.ui(ui, self.time + timeline.offset)
+                    * timeline.gain
+                    * 255.0) as u8;
                 if ui.button("delete track").clicked() {
                     timeline.id = -1;
                 }

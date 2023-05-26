@@ -22,6 +22,8 @@ impl ChannelWidget {
     }
 
     pub fn ui(&mut self, ui: &mut Ui, time: f32) -> f32 {
+        let time = time % 1000.0;
+
         let (response, painter) = ui.allocate_painter(Vec2::new(1000.0, 100.0), Sense::click());
 
         let to_screen = emath::RectTransform::from_to(
