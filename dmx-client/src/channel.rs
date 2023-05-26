@@ -53,6 +53,7 @@ impl ChannelWidget {
         let mut remove_list = Vec::new();
 
         let control_point_radius = 5.0;
+        let points = self.control_points.len();
 
         for (point, i) in &mut self.control_points {
             let size = Vec2::splat(2.0 * control_point_radius);
@@ -62,14 +63,16 @@ impl ChannelWidget {
             let point_id = response.id.with(*i);
             let point_response = ui.interact(point_rect, point_id, Sense::click_and_drag());
 
-            *point += point_response.drag_delta();
+            let mut delta = point_response.drag_delta();
 
-            
-            *point = to_screen.from().clamp(*point);
-
-            if point_response.clicked_by(PointerButton::Secondary) {
+            if *i == 0 || *i == points as i32 - 1 {
+                delta.x = 0.0;
+            } else if point_response.clicked_by(PointerButton::Secondary) {
                 remove_list.push(*i);
             }
+
+            *point += delta;
+            *point = to_screen.from().clamp(*point);
 
             let point_in_screen = to_screen.transform_pos(*point);
             let stroke = ui.style().interact(&point_response).fg_stroke;
