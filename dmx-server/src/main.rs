@@ -73,7 +73,7 @@ fn main() {
 
     let port = Arc::new(Mutex::new({
         let mut ports = available_ports().unwrap();
-        let mut port = ports.remove(0);
+        let mut port = ports.remove(1);
         port.open().unwrap();
         DmxHandle { port }
     }));
