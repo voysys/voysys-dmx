@@ -1,9 +1,9 @@
-use rust_dmx::available_ports;
+use rust_dmx::{available_ports, DmxPort};
 use std::{
-    io::{Read, Write},
+    io::Read,
     net::{Shutdown, TcpListener, TcpStream},
+    sync::{Arc, Mutex},
     thread,
-    time::{Duration, Instant},
 };
 
 #[derive(Copy, Clone, Default)]
@@ -15,42 +15,22 @@ impl Color {
             self.0, self.1, self.2, self.3, self.4, self.5, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
         ]
     }
-
-    /*
-    fn mix(&self, next: Color, t: f32) -> Color {
-        Color(
-            self.0 * t + next.0 * (1.0 - t),
-            self.1 * t + next.1 * (1.0 - t),
-            self.2 * t + next.2 * (1.0 - t),
-            self.3 * t + next.3 * (1.0 - t),
-            self.4 * t + next.4 * (1.0 - t),
-            self.5 * t + next.5 * (1.0 - t),
-        )
-    }*/
 }
 
 fn dmx(leds: &[Color; 5]) -> [u8; 60] {
     let mut output = [0; 60];
 
     for i in 0..leds.len() {
-        let next = (i + 1) % leds.len();
+        let color = leds[i];
 
-        let a = leds[i];
-        let b = leds[next];
-
-        let mix = a; //.mix(b, t);
-
-        output[(12 * i)..(12 * (i + 1))].copy_from_slice(&mix.dmx());
+        output[(12 * i)..(12 * (i + 1))].copy_from_slice(&color.dmx());
     }
 
     output
 }
 
-fn handle_client(mut stream: TcpStream) {
+fn handle_client(mut stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
     let mut data = [0_u8; 6]; // using 50 byte buffer
-    let mut ports = available_ports().unwrap();
-    let port = &mut ports[1];
-    port.open().unwrap();
 
     while match stream.read(&mut data) {
         Ok(size) => {
@@ -63,7 +43,10 @@ fn handle_client(mut stream: TcpStream) {
                 leds[3] = leds[0];
                 leds[4] = leds[0];
 
-                port.write(&dmx(&leds)).unwrap();
+                {
+                    let mut handle = handle.lock().unwrap();
+                    handle.port.write(&dmx(&leds)).unwrap();
+                }
             }
             true
         }
@@ -78,59 +61,33 @@ fn handle_client(mut stream: TcpStream) {
     } {}
 }
 
-const TIME: f32 = 5000.0;
+struct DmxHandle {
+    port: Box<dyn DmxPort>,
+}
+
+unsafe impl Send for DmxHandle {}
+
 fn main() {
-    let listener = TcpListener::bind("0.0.0.0:3333").unwrap();
-    println!("Server listening on port 3333");
+    let listener = TcpListener::bind("0.0.0.0:33333").unwrap();
+    println!("Server listening on port 33333");
+
+    let port = Arc::new(Mutex::new({
+        let mut ports = available_ports().unwrap();
+        let mut port = ports.remove(1);
+        port.open().unwrap();
+        DmxHandle { port }
+    }));
 
     for stream in listener.incoming() {
+        let port = port.clone();
         match stream {
             Ok(stream) => {
                 println!("New connection: {}", stream.peer_addr().unwrap());
-                thread::spawn(move || handle_client(stream));
+                thread::spawn(move || handle_client(stream, port));
             }
             Err(e) => {
                 println!("Error: {}", e);
-                /* connection failed */
             }
         }
     }
-    // close the socket server
-    drop(listener);
-
-    /*let mut ports = available_ports().unwrap();
-    let port = &mut ports[1];
-    port.open().unwrap();
-
-    let colors: [Color; 5] = [
-        Color(0.1, 0.2, 0.9, 0.0, 0.0, 0.0),
-        Color(0.4, 0.2, 0.7, 0.0, 0.0, 0.0),
-        Color(0.9, 0.1, 0.2, 0.0, 0.0, 0.0),
-        Color(0.5, 0.2, 0.2, 0.0, 0.0, 0.0),
-        Color(0.9, 0.1, 0.3, 0.0, 0.0, 0.0),
-    ];
-    let mut leds = [Color::default(); 5];
-
-    leds = colors;
-
-    let mut swap = Instant::now();
-
-    loop {
-        let t = swap.elapsed().as_millis() as f32 / TIME;
-
-        if swap.elapsed() > Duration::from_millis(TIME as _) {
-            swap = Instant::now();
-            let temp0 = leds[0];
-            for index in 0..(leds.len() - 1) {
-                let next = index + 1;
-
-                leds[index] = leds[next];
-            }
-
-            leds[leds.len() - 1] = temp0;
-        }
-
-        port.write(&dmx(&leds, t)).unwrap();
-        //thread::sleep(Duration::from_millis(5));
-    }*/
 }

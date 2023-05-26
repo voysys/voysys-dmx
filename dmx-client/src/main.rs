@@ -22,9 +22,9 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn tcp_thread(rx: Receiver<DmxColor>, run: Arc<AtomicBool>) {
-    match TcpStream::connect("10.0.2.124:3333") {
+    match TcpStream::connect("127.0.0.1:33333") {
         Ok(mut stream) => {
-            println!("Successfully connected to server in port 3333");
+            println!("Successfully connected to server in port 33333");
             while run.load(Ordering::SeqCst) {
                 if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
                     let data = [
