@@ -1,26 +1,17 @@
 use channel::ChannelWidget;
+use dmx_shared::{DmxColor, DmxMessage};
 use eframe::{
     egui::{self, DragValue, Slider, Widget},
     Storage,
 };
+use ewebsock::{WsMessage, WsReceiver, WsSender};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    io::Write,
-    net::TcpStream,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver, Sender},
-        Arc,
-    },
-    thread::{self, JoinHandle},
-    time::{Duration, Instant},
-};
-use zerocopy::AsBytes;
+use std::{fs, time::Instant};
 
 mod channel;
 
-fn main() -> Result<(), eframe::Error> {
+#[cfg(not(target_arch = "wasm32"))]
+fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 800.0]),
         ..Default::default()
@@ -39,6 +30,7 @@ fn main() -> Result<(), eframe::Error> {
                 Timeline::new(4),
             ],
             lights: [0, 1, 2, 3, 4],
+            smoke: None,
         });
 
     eframe::run_native(
@@ -48,38 +40,58 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
-fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
-    match TcpStream::connect("10.0.11.3:33333") {
-        Ok(mut stream) => {
-            println!("Successfully connected to server in port 33333");
-            while run.load(Ordering::SeqCst) {
-                if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
-                    let data = msg.as_bytes();
-                    stream.write_all(data).unwrap();
-                }
-            }
-        }
-        Err(e) => {
-            println!("Failed to connect: {}", e);
-        }
-    }
-    println!("Closing TCP Thread.");
+// When compiling to web using trunk:
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+
+    let web_options = eframe::WebOptions::default();
+
+    let state = fs::read_to_string("state.json")
+        .ok()
+        .and_then(|s| serde_json::from_str::<State>(&s).ok())
+        .unwrap_or(State {
+            cycle_length: 5.0,
+            timelines: vec![
+                Timeline::new(0),
+                Timeline::new(1),
+                Timeline::new(2),
+                Timeline::new(3),
+                Timeline::new(4),
+            ],
+            lights: [0, 1, 2, 3, 4],
+        });
+
+    wasm_bindgen_futures::spawn_local(async {
+        eframe::WebRunner::new()
+            .start(
+                "voysys-dmx", // hardcode it
+                web_options,
+                Box::new(|cc| Box::new(App::new(state))),
+            )
+            .await
+            .expect("failed to start eframe");
+    });
 }
 
-#[derive(Debug, Default, Copy, Clone, AsBytes, Serialize, Deserialize)]
-#[repr(C)]
-struct DmxMessage {
-    channels: [DmxColor; 5],
-}
-
-#[derive(Debug, Default, Copy, Clone, AsBytes, Serialize, Deserialize)]
-#[repr(C)]
-struct DmxColor {
-    rgb: [u8; 3],
-    white: u8,
-    amber: u8,
-    uv: u8,
-}
+// fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
+//     match TcpStream::connect("10.0.11.3:33333") {
+//         Ok(mut stream) => {
+//             println!("Successfully connected to server in port 33333");
+//             while run.load(Ordering::SeqCst) {
+//                 if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
+//                     let data = msg.as_bytes();
+//                     stream.write_all(data).unwrap();
+//                 }
+//             }
+//         }
+//         Err(e) => {
+//             println!("Failed to connect: {}", e);
+//         }
+//     }
+//     println!("Closing TCP Thread.");
+// }
 
 #[derive(Serialize, Deserialize)]
 struct Timeline {
@@ -111,12 +123,12 @@ struct State {
     cycle_length: f32,
     timelines: Vec<Timeline>,
     lights: [i32; 5],
+    smoke: Option<u8>,
 }
 
 struct App {
-    tcp_thread: Option<JoinHandle<()>>,
-    run: Arc<AtomicBool>,
-    tx: Sender<DmxMessage>,
+    ws_sender: WsSender,
+    ws_receiver: WsReceiver,
 
     last_frame_time: Instant,
     time: f32,
@@ -125,18 +137,11 @@ struct App {
 
 impl App {
     fn new(state: State) -> Self {
-        let (tx, rx) = mpsc::channel();
-        let run = Arc::new(AtomicBool::new(true));
-
-        let tcp_thread = {
-            let run = run.clone();
-            Some(thread::spawn(move || tcp_thread(rx, run)))
-        };
+        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.3:33333").unwrap();
 
         Self {
-            tcp_thread,
-            run,
-            tx,
+            ws_sender,
+            ws_receiver,
             last_frame_time: Instant::now(),
             time: 0.0,
             state,
@@ -185,6 +190,10 @@ impl eframe::App for App {
                     .push(Timeline::new(self.state.timelines.len() as i8))
             }
 
+            if ui.button("Add smoke").clicked() {
+                self.state.smoke = Some(255);
+            }
+
             for timeline in &mut self.state.timelines.iter_mut() {
                 ui.horizontal(|ui| {
                     ui.label("Gain");
@@ -214,15 +223,25 @@ impl eframe::App for App {
                 ui.add(egui::Separator::default());
             }
 
-            let mut res = DmxMessage::default();
+            let mut res = DmxMessage {
+                buffer: vec![0u8; 512],
+            };
 
             for (i, light) in self.state.lights.iter().copied().enumerate() {
                 if let Some(timeline) = self.state.timelines.get(light as usize) {
-                    res.channels[i] = timeline.color;
+                    let start = i * 12;
+                    let end = start + 12;
+
+                    res.buffer[start..end].copy_from_slice(&timeline.color.dmx());
                 }
             }
 
-            self.tx.send(res).ok();
+            res.buffer[60] = self.state.smoke.unwrap_or_default();
+
+            while let Some(_event) = self.ws_receiver.try_recv() {}
+
+            self.ws_sender
+                .send(WsMessage::Text(serde_json::to_string(&res).unwrap()));
         });
     }
 
@@ -233,10 +252,5 @@ impl eframe::App for App {
 }
 
 impl Drop for App {
-    fn drop(&mut self) {
-        self.run.store(false, Ordering::SeqCst);
-        if let Some(thread) = self.tcp_thread.take() {
-            thread.join().ok();
-        }
-    }
+    fn drop(&mut self) {}
 }

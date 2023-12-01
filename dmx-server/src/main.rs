@@ -1,81 +1,68 @@
+use dmx_shared::DmxMessage;
 use rust_dmx::{available_ports, DmxPort};
 use std::{
-    io::Read,
-    net::{Shutdown, TcpListener, TcpStream},
+    net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
 };
-use zerocopy::FromBytes;
 
-#[derive(Debug, Default, Copy, Clone, FromBytes)]
-#[repr(C)]
-struct DmxMessage {
-    channels: [DmxColor; 5],
-}
+// fn dmx(msg: &DmxMessage) -> [u8; 60] {
+//     let mut output = [0; 60];
 
-#[derive(Debug, Default, Copy, Clone, FromBytes)]
-#[repr(C)]
-struct DmxColor {
-    rgb: [u8; 3],
-    white: u8,
-    amber: u8,
-    uv: u8,
-}
+//     for i in 0..msg.channels.len() {
+//         let color = msg.channels[i];
 
-impl DmxColor {
-    fn dmx(self) -> [u8; 12] {
-        [
-            self.rgb[0],
-            self.rgb[1],
-            self.rgb[2],
-            self.white,
-            self.amber,
-            self.uv,
-            0xff,
-            0xff,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-        ]
-    }
-}
+//         output[(12 * i)..(12 * (i + 1))].copy_from_slice(&color.dmx());
+//     }
 
-fn dmx(msg: &DmxMessage) -> [u8; 60] {
-    let mut output = [0; 60];
+//     output
+// }
 
-    for i in 0..msg.channels.len() {
-        let color = msg.channels[i];
+fn handle_client_websocket(stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
+    let peer_addr = stream.peer_addr().unwrap();
 
-        output[(12 * i)..(12 * (i + 1))].copy_from_slice(&color.dmx());
-    }
+    let mut websocket = tungstenite::accept(stream).unwrap();
 
-    output
-}
-
-fn handle_client(mut stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
-    let mut data = [0_u8; 6 * 5];
-
-    while match stream.read_exact(&mut data) {
-        Ok(()) => {
-            let msg = DmxMessage::read_from(data.as_slice()).unwrap();
-            {
-                let mut handle = handle.lock().unwrap();
-                handle.port.write(&dmx(&msg)).unwrap();
+    loop {
+        match websocket.read() {
+            Ok(tungstenite::Message::Text(msg)) => {
+                if let Ok(msg) = serde_json::from_str::<DmxMessage>(&msg) {
+                    let mut handle = handle.lock().unwrap();
+                    handle.port.write(&msg.buffer).unwrap();
+                }
             }
-
-            true
+            Ok(_) => (),
+            Err(err) => {
+                println!("An error occurred, terminating connection with {peer_addr}: {err}",);
+                return;
+            }
         }
-        Err(_) => {
-            println!(
-                "An error occurred, terminating connection with {}",
-                stream.peer_addr().unwrap()
-            );
-            stream.shutdown(Shutdown::Both).unwrap();
-            false
-        }
-    } {}
+    }
 }
+
+// fn handle_client(mut stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
+//     let mut data = [0_u8; 6 * 5];
+
+//     while match stream.read_exact(&mut data) {
+//         Ok(()) => {
+//             let msg = DmxMessage::read_from(data.as_slice()).unwrap();
+//             {
+//                 let mut handle = handle.lock().unwrap();
+//                 handle.port.write(&dmx(&msg)).unwrap();
+//             }
+
+//             true
+//         }
+//         Err(_) => {
+//             println!(
+//                 "An error occurred, terminating connection with {}",
+//                 stream.peer_addr().unwrap()
+//             );
+//             stream.shutdown(Shutdown::Both).unwrap();
+//             false
+//         }
+//     } {}
+// }
 
 struct DmxHandle {
     port: Box<dyn DmxPort>,
@@ -99,7 +86,7 @@ fn main() {
         match stream {
             Ok(stream) => {
                 println!("New connection: {}", stream.peer_addr().unwrap());
-                thread::spawn(move || handle_client(stream, port));
+                thread::spawn(move || handle_client_websocket(stream, port));
             }
             Err(e) => {
                 println!("Error: {}", e);

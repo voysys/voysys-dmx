@@ -3,8 +3,9 @@ name = "dmx-server"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+dmx-shared = { path = "../dmx-shared" }
 rust_dmx = { git = "https://github.com/JoNil/rust-dmx.git" }
-zerocopy = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tungstenite = { version = ">=0.17, <=0.20" }

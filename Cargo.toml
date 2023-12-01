@@ -4,4 +4,5 @@ resolver = "2"
 members = [
     "dmx-client",
     "dmx-server",
+    "dmx-shared",
 ]
