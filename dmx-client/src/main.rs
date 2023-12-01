@@ -6,7 +6,9 @@ use eframe::{
 };
 use ewebsock::{WsMessage, WsReceiver, WsSender};
 use serde::{Deserialize, Serialize};
-use std::{fs, time::Instant};
+use std::fs;
+
+use std::time::Instant;
 
 mod channel;
 
@@ -47,20 +49,17 @@ fn main() {
 
     let web_options = eframe::WebOptions::default();
 
-    let state = fs::read_to_string("state.json")
-        .ok()
-        .and_then(|s| serde_json::from_str::<State>(&s).ok())
-        .unwrap_or(State {
-            cycle_length: 5.0,
-            timelines: vec![
-                Timeline::new(0),
-                Timeline::new(1),
-                Timeline::new(2),
-                Timeline::new(3),
-                Timeline::new(4),
-            ],
-            lights: [0, 1, 2, 3, 4],
-        });
+    let state = State {
+        cycle_length: 5.0,
+        timelines: vec![
+            Timeline::new(0),
+            Timeline::new(1),
+            Timeline::new(2),
+            Timeline::new(3),
+            Timeline::new(4),
+        ],
+        lights: [0, 1, 2, 3, 4],
+    };
 
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()
@@ -73,24 +72,6 @@ fn main() {
             .expect("failed to start eframe");
     });
 }
-
-// fn tcp_thread(rx: Receiver<DmxMessage>, run: Arc<AtomicBool>) {
-//     match TcpStream::connect("10.0.11.3:33333") {
-//         Ok(mut stream) => {
-//             println!("Successfully connected to server in port 33333");
-//             while run.load(Ordering::SeqCst) {
-//                 if let Ok(msg) = rx.recv_timeout(Duration::from_millis(10)) {
-//                     let data = msg.as_bytes();
-//                     stream.write_all(data).unwrap();
-//                 }
-//             }
-//         }
-//         Err(e) => {
-//             println!("Failed to connect: {}", e);
-//         }
-//     }
-//     println!("Closing TCP Thread.");
-// }
 
 #[derive(Serialize, Deserialize)]
 struct Timeline {
