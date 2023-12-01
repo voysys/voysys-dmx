@@ -852,6 +852,7 @@ dependencies = [
  "serde_json",
  "tracing-subscriber",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
