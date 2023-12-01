@@ -22,7 +22,7 @@ mod channel;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(1024.0, 800.0)),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 800.0]),
         ..Default::default()
     };
 
