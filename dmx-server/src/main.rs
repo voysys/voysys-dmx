@@ -28,7 +28,7 @@ fn handle_client_websocket(stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
             Ok(tungstenite::Message::Text(msg)) => {
                 if let Ok(msg) = serde_json::from_str::<DmxMessage>(&msg) {
                     let mut handle = handle.lock().unwrap();
-                    handle.port.write(&msg.buffer).unwrap();
+                    handle.port.write(&msg.buffer[..128]).unwrap();
                 }
             }
             Ok(_) => (),

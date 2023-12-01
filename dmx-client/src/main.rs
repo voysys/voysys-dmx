@@ -190,8 +190,8 @@ impl eframe::App for App {
                     .push(Timeline::new(self.state.timelines.len() as i8))
             }
 
-            if ui.button("Add smoke").clicked() {
-                self.state.smoke = Some(255);
+            if ui.button("Add smoke").is_pointer_button_down_on() {
+                self.state.smoke = Some(128);
             }
 
             for timeline in &mut self.state.timelines.iter_mut() {
@@ -236,7 +236,7 @@ impl eframe::App for App {
                 }
             }
 
-            res.buffer[60] = self.state.smoke.unwrap_or_default();
+            res.buffer[100] = self.state.smoke.unwrap_or_default();
 
             while let Some(_event) = self.ws_receiver.try_recv() {}
 
