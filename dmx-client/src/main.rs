@@ -30,7 +30,6 @@ fn main() -> eframe::Result<()> {
                 Timeline::new(4),
             ],
             lights: [0, 1, 2, 3, 4],
-            smoke: None,
         });
 
     eframe::run_native(
@@ -123,7 +122,6 @@ struct State {
     cycle_length: f32,
     timelines: Vec<Timeline>,
     lights: [i32; 5],
-    smoke: Option<u8>,
 }
 
 struct App {
@@ -133,6 +131,7 @@ struct App {
     last_frame_time: Instant,
     time: f32,
     state: State,
+    smoke: Option<u8>,
 }
 
 impl App {
@@ -145,6 +144,7 @@ impl App {
             last_frame_time: Instant::now(),
             time: 0.0,
             state,
+            smoke: None,
         }
     }
 }
@@ -191,9 +191,9 @@ impl eframe::App for App {
             }
 
             if ui.button("Add smoke").is_pointer_button_down_on() {
-                self.state.smoke = Some(128);
+                self.smoke = Some(128);
             } else {
-                self.state.smoke = None;
+                self.smoke = None;
             }
 
             for timeline in &mut self.state.timelines.iter_mut() {
@@ -238,7 +238,7 @@ impl eframe::App for App {
                 }
             }
 
-            res.buffer[100] = self.state.smoke.unwrap_or_default();
+            res.buffer[100] = self.smoke.unwrap_or_default();
 
             while let Some(_event) = self.ws_receiver.try_recv() {}
 
