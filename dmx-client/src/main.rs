@@ -192,6 +192,8 @@ impl eframe::App for App {
 
             if ui.button("Add smoke").is_pointer_button_down_on() {
                 self.state.smoke = Some(128);
+            } else {
+                self.state.smoke = None;
             }
 
             for timeline in &mut self.state.timelines.iter_mut() {
