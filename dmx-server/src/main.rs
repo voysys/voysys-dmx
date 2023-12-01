@@ -27,8 +27,12 @@ fn handle_client_websocket(stream: TcpStream, handle: Arc<Mutex<DmxHandle>>) {
         match websocket.read() {
             Ok(tungstenite::Message::Text(msg)) => {
                 if let Ok(msg) = serde_json::from_str::<DmxMessage>(&msg) {
+                    eprintln!("{msg:?}");
+
                     let mut handle = handle.lock().unwrap();
-                    handle.port.write(&msg.buffer[..128]).unwrap();
+                    if let Err(err) = handle.port.write(&msg.buffer[..128]) {
+                        eprintln!("Failed to write to port: {err}");
+                    }
                 }
             }
             Ok(_) => (),
