@@ -1,4 +1,5 @@
 use channel::ChannelWidget;
+use dmx_device::DmxDevice;
 use dmx_shared::{DmxColor, DmxMessage};
 use eframe::{
     egui::{self, DragValue, Slider, Widget},
@@ -14,6 +15,7 @@ use std::time::Instant;
 use web_time::Instant;
 
 mod channel;
+mod dmx_device;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
@@ -35,6 +37,7 @@ fn main() -> eframe::Result<()> {
                 Timeline::new(4),
             ],
             lights: [0, 1, 2, 3, 4],
+            devices: Vec::new(),
         });
 
     eframe::run_native(
@@ -106,6 +109,7 @@ struct State {
     cycle_length: f32,
     timelines: Vec<Timeline>,
     lights: [i32; 5],
+    devices: Vec<DmxDevice>,
 }
 
 struct App {
@@ -158,13 +162,39 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
+                if ui.button("Add DMX Device").clicked() {
+                    self.state.devices.push(DmxDevice::default());
+                }
+
+                if ui.button("Enable All").clicked() {
+                    for device in &mut self.state.devices {
+                        device.enabled = true;
+                    }
+                }
+
+                if ui.button("Disable All").clicked() {
+                    for device in &mut self.state.devices {
+                        device.enabled = false;
+                    }
+                }
+            });
+
+            ui.horizontal(|ui| {
                 ui.label("Cycle");
                 DragValue::new(&mut self.state.cycle_length)
                     .speed(0.01)
                     .ui(ui);
             });
 
-            for i in &mut self.state.lights.iter_mut() {
+            let mut res = DmxMessage {
+                buffer: vec![0u8; 512],
+            };
+
+            for (index, device) in self.state.devices.iter_mut().enumerate() {
+                device.update(ui, index, &mut res);
+            }
+
+            /* for i in &mut self.state.lights.iter_mut() {
                 Slider::new(i, 0..=(self.state.timelines.len() as i32 - 1)).ui(ui);
             }
 
@@ -223,6 +253,7 @@ impl eframe::App for App {
             }
 
             res.buffer[63] = self.smoke.unwrap_or_default();
+            */
 
             while let Some(_event) = self.ws_receiver.try_recv() {}
 
