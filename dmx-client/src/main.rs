@@ -28,14 +28,6 @@ fn main() -> eframe::Result<()> {
         .ok()
         .and_then(|s| serde_json::from_str::<State>(&s).ok())
         .unwrap_or(State {
-            cycle_length: 5.0,
-            timelines: vec![
-                Timeline::new(0),
-                Timeline::new(1),
-                Timeline::new(2),
-                Timeline::new(3),
-                Timeline::new(4),
-            ],
             lights: [0, 1, 2, 3, 4],
             devices: Vec::new(),
         });
@@ -80,34 +72,7 @@ fn main() {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Timeline {
-    id: i8,
-    red: ChannelWidget,
-    green: ChannelWidget,
-    blue: ChannelWidget,
-    color: DmxColor,
-    gain: f32,
-    offset: f32,
-}
-
-impl Timeline {
-    fn new(id: i8) -> Self {
-        Self {
-            id,
-            red: ChannelWidget::new(),
-            green: ChannelWidget::new(),
-            blue: ChannelWidget::new(),
-            color: DmxColor::default(),
-            gain: 1.0,
-            offset: 0.0,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
 struct State {
-    cycle_length: f32,
-    timelines: Vec<Timeline>,
     lights: [i32; 5],
     devices: Vec<DmxDevice>,
 }
@@ -117,7 +82,7 @@ struct App {
     ws_receiver: WsReceiver,
 
     last_frame_time: Instant,
-    time: f32,
+
     state: State,
     smoke: Option<u8>,
 }
@@ -130,7 +95,6 @@ impl App {
             ws_sender,
             ws_receiver,
             last_frame_time: Instant::now(),
-            time: 0.0,
             state,
             smoke: None,
         }
@@ -150,15 +114,7 @@ impl eframe::App for App {
             dt
         };
 
-        let speed = 1000.0 / self.state.cycle_length;
-
-        self.time += speed * dt;
-
-        if self.time > 1000.0 {
-            self.time = 0.0;
-        }
-
-        self.state.timelines.retain(|timeline| timeline.id > -1);
+        // self.state.timelines.retain(|timeline| timeline.id > -1);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -179,19 +135,12 @@ impl eframe::App for App {
                 }
             });
 
-            ui.horizontal(|ui| {
-                ui.label("Cycle");
-                DragValue::new(&mut self.state.cycle_length)
-                    .speed(0.01)
-                    .ui(ui);
-            });
-
             let mut res = DmxMessage {
                 buffer: vec![0u8; 512],
             };
 
             for (index, device) in self.state.devices.iter_mut().enumerate() {
-                device.update(ui, index, &mut res);
+                device.update(ui, index, &mut res, dt);
             }
 
             /* for i in &mut self.state.lights.iter_mut() {

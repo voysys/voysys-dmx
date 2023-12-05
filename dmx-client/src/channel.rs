@@ -5,7 +5,7 @@ use eframe::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChannelWidget {
     next_id: i32,
     control_points: Vec<(Pos2, i32)>,
