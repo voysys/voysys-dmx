@@ -24,13 +24,25 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    let state = fs::read_to_string("state.json")
-        .ok()
-        .and_then(|s| serde_json::from_str::<State>(&s).ok())
-        .unwrap_or(State {
-            lights: [0, 1, 2, 3, 4],
-            devices: Vec::new(),
-        });
+    let state = fs::read_to_string("state.json").ok().unwrap();
+
+    let state = serde_json::from_str::<State>(&state);
+
+    let state = match state {
+        Ok(s) => s,
+        Err(e) => {
+            log::info!("{e}");
+
+            State {
+                devices: Vec::new(),
+            }
+        }
+    };
+    //let state = state.and_then(|s| serde_json::from_str::<State>(&s).ok());
+
+    /*let state = state.unwrap_or(State {
+        devices: Vec::new(),
+    });*/
 
     eframe::run_native(
         "Voysys DMX controller",
@@ -73,7 +85,6 @@ fn main() {
 
 #[derive(Serialize, Deserialize)]
 struct State {
-    lights: [i32; 5],
     devices: Vec<DmxDevice>,
 }
 

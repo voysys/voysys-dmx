@@ -41,11 +41,10 @@ pub struct DmxDevice {
     cycle_length: f32,
     timelines: Vec<Timeline>,
 
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     values: Vec<u8>,
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     time: f32,
-    //lights: [i32; 5],
 }
 
 impl DmxDevice {
@@ -99,7 +98,7 @@ impl DmxDevice {
 
                 for (index, value) in &mut self.values.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(format!("Channel {index}"));
+                        ui.label(format!("Channel {}", index + 1));
                         let mut temp_value = *value as i32;
                         if DragValue::new(&mut temp_value)
                             .clamp_range(0..=255)
@@ -111,7 +110,7 @@ impl DmxDevice {
                         }
                     });
 
-                    CollapsingHeader::new(format!("{index}: Timeline"))
+                    CollapsingHeader::new(format!("{}: Timeline", index + 1))
                         .default_open(false)
                         .show(ui, |ui| {
                             let timeline = &mut self.timelines[index];
@@ -131,7 +130,6 @@ impl DmxDevice {
                             *value = (timeline.red.ui(ui, self.time + timeline.offset)
                                 * timeline.gain
                                 * 255.0) as u8;
-                            println!("{}", self.time);
                             /*timeline.color.rgb[1] =
                                 (timeline.green.ui(ui, self.time + timeline.offset)
                                     * timeline.gain
@@ -148,7 +146,7 @@ impl DmxDevice {
                 }
             });
 
-        if self.enabled {
+        if self.enabled && self.size as usize == self.values.len() {
             for i in 0..self.size {
                 dmx_message.buffer[(self.adress + i) as usize] = self.values[i as usize];
             }
