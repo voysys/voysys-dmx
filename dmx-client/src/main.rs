@@ -1,8 +1,7 @@
-use channel::ChannelWidget;
 use dmx_device::DmxDevice;
-use dmx_shared::{DmxColor, DmxMessage};
+use dmx_shared::DmxMessage;
 use eframe::{
-    egui::{self, DragValue, Slider, Widget},
+    egui::{self},
     Storage,
 };
 use ewebsock::{WsMessage, WsReceiver, WsSender};
@@ -38,11 +37,6 @@ fn main() -> eframe::Result<()> {
             }
         }
     };
-    //let state = state.and_then(|s| serde_json::from_str::<State>(&s).ok());
-
-    /*let state = state.unwrap_or(State {
-        devices: Vec::new(),
-    });*/
 
     eframe::run_native(
         "Voysys DMX controller",
@@ -95,7 +89,6 @@ struct App {
     last_frame_time: Instant,
 
     state: State,
-    smoke: Option<u8>,
 }
 
 impl App {
@@ -107,7 +100,6 @@ impl App {
             ws_receiver,
             last_frame_time: Instant::now(),
             state,
-            smoke: None,
         }
     }
 }
@@ -124,8 +116,6 @@ impl eframe::App for App {
             self.last_frame_time = new_time;
             dt
         };
-
-        // self.state.timelines.retain(|timeline| timeline.id > -1);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -154,67 +144,6 @@ impl eframe::App for App {
                 for (index, device) in self.state.devices.iter_mut().enumerate() {
                     device.update(ui, index, &mut res, dt);
                 }
-
-                /* for i in &mut self.state.lights.iter_mut() {
-                    Slider::new(i, 0..=(self.state.timelines.len() as i32 - 1)).ui(ui);
-                }
-
-                if ui.button("Add track").clicked() {
-                    self.state
-                        .timelines
-                        .push(Timeline::new(self.state.timelines.len() as i8))
-                }
-
-                if ui.button("Add smoke").is_pointer_button_down_on() {
-                    self.smoke = Some(128);
-                } else {
-                    self.smoke = None;
-                }
-
-                for timeline in &mut self.state.timelines.iter_mut() {
-                    ui.horizontal(|ui| {
-                        ui.label("Gain");
-                        DragValue::new(&mut timeline.gain)
-                            .clamp_range(0.0..=1.0)
-                            .speed(0.01)
-                            .ui(ui);
-                        ui.label("Offset");
-                        DragValue::new(&mut timeline.offset)
-                            .clamp_range(0.0..=1000.0)
-                            .speed(1.0)
-                            .ui(ui);
-                    });
-
-                    timeline.color.rgb[0] = (timeline.red.ui(ui, self.time + timeline.offset)
-                        * timeline.gain
-                        * 255.0) as u8;
-                    timeline.color.rgb[1] = (timeline.green.ui(ui, self.time + timeline.offset)
-                        * timeline.gain
-                        * 255.0) as u8;
-                    timeline.color.rgb[2] = (timeline.blue.ui(ui, self.time + timeline.offset)
-                        * timeline.gain
-                        * 255.0) as u8;
-                    if ui.button("delete track").clicked() {
-                        timeline.id = -1;
-                    }
-                    ui.add(egui::Separator::default());
-                }
-
-                let mut res = DmxMessage {
-                    buffer: vec![0u8; 512],
-                };
-
-                for (i, light) in self.state.lights.iter().copied().enumerate() {
-                    if let Some(timeline) = self.state.timelines.get(light as usize) {
-                        let start = i * 12;
-                        let end = start + 12;
-
-                        res.buffer[start..end].copy_from_slice(&timeline.color.dmx());
-                    }
-                }
-
-                res.buffer[63] = self.smoke.unwrap_or_default();
-                */
 
                 while let Some(_event) = self.ws_receiver.try_recv() {}
 

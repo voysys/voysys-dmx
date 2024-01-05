@@ -128,17 +128,6 @@ impl DmxDevice {
                             *value = (timeline.red.ui(ui, self.time + timeline.offset)
                                 * timeline.gain
                                 * 255.0) as u8;
-                            /*timeline.color.rgb[1] =
-                                (timeline.green.ui(ui, self.time + timeline.offset)
-                                    * timeline.gain
-                                    * 255.0) as u8;
-                            timeline.color.rgb[2] =
-                                (timeline.blue.ui(ui, self.time + timeline.offset)
-                                    * timeline.gain
-                                    * 255.0) as u8;
-                            if ui.button("delete track").clicked() {
-                                timeline.id = -1;
-                            }*/
                             ui.add(egui::Separator::default());
                         });
                 }
