@@ -32,18 +32,33 @@ impl Timeline {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct DmxDevice {
     pub enabled: bool,
     adress: u16,
     size: u16,
-    name: String,
+    pub name: String,
     cycle_length: f32,
     timelines: Vec<Timeline>,
 
     values: Vec<u8>,
     #[serde(skip)]
     time: f32,
+}
+
+impl Default for DmxDevice {
+    fn default() -> Self {
+        DmxDevice {
+            enabled: false,
+            adress: 0,
+            size: 1,
+            name: "Device".to_string(),
+            cycle_length: 10.0,
+            timelines: Vec::new(),
+            values: Vec::new(),
+            time: 0.0,
+        }
+    }
 }
 
 impl DmxDevice {
@@ -72,7 +87,8 @@ impl DmxDevice {
         }
     }
 
-    pub fn gui(&mut self, ui: &mut Ui, index: usize, dt: f32) {
+    pub fn gui(&mut self, ui: &mut Ui, dt: f32) -> bool {
+        let mut delete = false;
         let speed = 1000.0 / self.cycle_length;
 
         self.time += speed * dt;
@@ -81,97 +97,102 @@ impl DmxDevice {
             self.time = 0.0;
         }
 
-        CollapsingHeader::new(format!("Device {index} ({})", self.name))
-            .default_open(false)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(if self.enabled { "Enabled" } else { "Disabled" });
-                    if ui.button("Toggle").clicked() {
-                        self.enabled = !self.enabled;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Name:");
-                    ui.text_edit_singleline(&mut self.name);
-                });
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Name:");
+                ui.text_edit_singleline(&mut self.name);
 
-                ui.horizontal(|ui| {
-                    ui.label("Cycle");
-                    DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
-                });
+                if ui
+                    .button(if self.enabled { "Enabled" } else { "Disabled" })
+                    .clicked()
+                {
+                    self.enabled = !self.enabled;
+                }
 
+                delete = ui.button("Delete").clicked();
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Address:");
+                let mut address = self.adress + 1;
+
+                DragValue::new(&mut address)
+                    .clamp_range(1..=512)
+                    .speed(1.0)
+                    .ui(ui);
+                self.adress = address - 1;
+
+                ui.label("Size:");
+                if DragValue::new(&mut self.size)
+                    .clamp_range(0..=512)
+                    .speed(1.0)
+                    .ui(ui)
+                    .changed()
+                {
+                    self.values.resize(self.size as usize, 0);
+                    self.timelines.resize(self.size as usize, Timeline::new(0));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Cycle");
+                DragValue::new(&mut self.cycle_length).speed(0.01).ui(ui);
+            });
+
+            for (index, value) in &mut self.values.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label("Address:");
-                    DragValue::new(&mut self.adress)
-                        .clamp_range(0..=512)
-                        .speed(1.0)
-                        .ui(ui);
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Size:");
-                    if DragValue::new(&mut self.size)
-                        .clamp_range(0..=512)
+                    ui.label(format!("Channel {}", index + 1));
+                    let mut temp_value = *value as i32;
+                    if DragValue::new(&mut temp_value)
+                        .clamp_range(0..=255)
                         .speed(1.0)
                         .ui(ui)
                         .changed()
                     {
-                        self.values.resize(self.size as usize, 0);
-                        self.timelines.resize(self.size as usize, Timeline::new(0));
+                        *value = temp_value as u8;
                     }
                 });
 
-                for (index, value) in &mut self.values.iter_mut().enumerate() {
+                let timeline = &mut self.timelines[index];
+                CollapsingHeader::new(format!(
+                    "{}: Timeline ({})",
+                    index + 1,
+                    if timeline.red.enabled {
+                        "Enabled"
+                    } else {
+                        "Disabled"
+                    }
+                ))
+                .default_open(false)
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(format!("Channel {}", index + 1));
-                        let mut temp_value = *value as i32;
-                        if DragValue::new(&mut temp_value)
-                            .clamp_range(0..=255)
-                            .speed(1.0)
-                            .ui(ui)
-                            .changed()
-                        {
-                            *value = temp_value as u8;
-                        }
-                    });
-
-                    let timeline = &mut self.timelines[index];
-                    CollapsingHeader::new(format!(
-                        "{}: Timeline ({})",
-                        index + 1,
-                        if timeline.red.enabled {
+                        ui.label(if timeline.red.enabled {
                             "Enabled"
                         } else {
                             "Disabled"
-                        }
-                    ))
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(if timeline.red.enabled {
-                                "Enabled"
-                            } else {
-                                "Disabled"
-                            });
-                            if ui.button("Toggle").clicked() {
-                                timeline.red.enabled = !timeline.red.enabled;
-                            }
-
-                            ui.label("Gain");
-                            DragValue::new(&mut timeline.gain)
-                                .clamp_range(0.0..=1.0)
-                                .speed(0.01)
-                                .ui(ui);
-                            ui.label("Offset");
-                            DragValue::new(&mut timeline.offset)
-                                .clamp_range(0.0..=1000.0)
-                                .speed(1.0)
-                                .ui(ui);
                         });
+                        if ui.button("Toggle").clicked() {
+                            timeline.red.enabled = !timeline.red.enabled;
+                        }
 
-                        timeline.red.ui(ui);
-                        ui.add(egui::Separator::default());
+                        ui.label("Gain");
+                        DragValue::new(&mut timeline.gain)
+                            .clamp_range(0.0..=1.0)
+                            .speed(0.01)
+                            .ui(ui);
+                        ui.label("Offset");
+                        DragValue::new(&mut timeline.offset)
+                            .clamp_range(0.0..=1000.0)
+                            .speed(1.0)
+                            .ui(ui);
                     });
-                }
-            });
+
+                    timeline.red.ui(ui);
+                    ui.add(egui::Separator::default());
+                });
+            }
+        });
+
+        delete
     }
 }

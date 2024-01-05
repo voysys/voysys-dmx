@@ -89,17 +89,20 @@ struct App {
     last_frame_time: Instant,
 
     state: State,
+
+    selected_device: i32,
 }
 
 impl App {
     fn new(state: State) -> Self {
-        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.3:33333").unwrap();
+        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.4:33333").unwrap();
 
         Self {
             ws_sender,
             ws_receiver,
             last_frame_time: Instant::now(),
             state,
+            selected_device: -1,
         }
     }
 }
@@ -133,7 +136,47 @@ impl eframe::App for App {
                 .send(WsMessage::Text(serde_json::to_string(&res).unwrap()));
         }
 
+        egui::SidePanel::left("item_panel")
+            .resizable(true)
+            .default_width(200.0)
+            .width_range(80.0..=250.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button("Enable All").clicked() {
+                            for device in &mut self.state.devices {
+                                device.enabled = true;
+                            }
+                        }
+
+                        if ui.button("Disable All").clicked() {
+                            for device in &mut self.state.devices {
+                                device.enabled = false;
+                            }
+                        }
+                    });
+
+                    if ui.button("Add DMX Device").clicked() {
+                        self.state.devices.push(DmxDevice::default());
+                    }
+
+                    for (index, device) in self.state.devices.iter_mut().enumerate() {
+                        ui.selectable_value(&mut self.selected_device, index as i32, &device.name);
+                    }
+                });
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
+            if self.selected_device >= 0 {
+                let device = &mut self.state.devices[self.selected_device as usize];
+                if device.gui(ui, dt) {
+                    self.state.devices.remove(self.selected_device as usize);
+                    self.selected_device = -1;
+                }
+            }
+        });
+
+        /*egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("Add DMX Device").clicked() {
@@ -157,7 +200,7 @@ impl eframe::App for App {
                     device.gui(ui, index, dt);
                 }
             });
-        });
+        });*/
     }
 
     fn save(&mut self, _storage: &mut dyn Storage) {
