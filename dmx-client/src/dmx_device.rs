@@ -40,8 +40,6 @@ pub struct DmxDevice {
     name: String,
     cycle_length: f32,
     timelines: Vec<Timeline>,
-
-    #[serde(skip)]
     values: Vec<u8>,
     #[serde(skip)]
     time: f32,
