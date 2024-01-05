@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 pub struct ChannelWidget {
     next_id: i32,
     control_points: Vec<(Pos2, i32)>,
+
+    #[serde(default)]
+    pub enabled: bool,
+
+    #[serde(skip)]
+    current_point: Pos2,
+    #[serde(skip)]
+    current_time: f32,
 }
 
 impl ChannelWidget {
@@ -20,12 +28,13 @@ impl ChannelWidget {
                 (Pos2::new(100.0, 64.0), 1),
                 (Pos2::new(1000.0, 0.0), 2),
             ],
+            current_point: Pos2::ZERO,
+            current_time: 0.0,
+            enabled: false,
         }
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, time: f32) -> f32 {
-        let time = time % 1000.0;
-
+    pub fn ui(&mut self, ui: &mut Ui) {
         let (response, painter) = ui.allocate_painter(Vec2::new(1000.0, 100.0), Sense::click());
 
         let to_screen = emath::RectTransform::from_to(
@@ -123,27 +132,7 @@ impl ChannelWidget {
             self.control_points[len - 1].0.x = 1000.0;
         }
 
-        let mut before = Pos2::new(0.0, 100.0);
-        let mut after = Pos2::new(1000.0, 100.0);
-
-        for points in self.control_points.windows(2) {
-            if points[0].0.x <= time && points[1].0.x > time {
-                before = points[0].0;
-                after = points[1].0;
-            }
-        }
-
-        let range = after.x - before.x;
-        let pos = time - before.x;
-
-        let ratio = pos / range;
-
-        let x = time;
-        let y = before.y * (1.0 - ratio) + after.y * ratio;
-
-        let value = 1.0 - y / 100.0;
-
-        let pos = to_screen * Pos2::new(x, y);
+        let pos: Pos2 = to_screen * self.current_point;
 
         painter.add(Shape::circle_stroke(
             pos,
@@ -164,17 +153,45 @@ impl ChannelWidget {
         }
 
         {
-            let points_in_screen: Vec<Pos2> = [Pos2::new(time, 0.0), Pos2::new(time, 100.0)]
-                .iter()
-                .map(|p| to_screen * *p)
-                .collect();
+            let points_in_screen: Vec<Pos2> = [
+                Pos2::new(self.current_time, 0.0),
+                Pos2::new(self.current_time, 100.0),
+            ]
+            .iter()
+            .map(|p| to_screen * *p)
+            .collect();
 
             painter.add(PathShape::line(
                 points_in_screen,
                 Stroke::new(2.0, Color32::WHITE.linear_multiply(0.25)),
             ));
         }
+    }
 
-        value
+    pub fn update(&mut self, time: f32) -> f32 {
+        let time = time % 1000.0;
+        self.current_time = time;
+
+        let mut before = Pos2::new(0.0, 100.0);
+        let mut after = Pos2::new(1000.0, 100.0);
+
+        for points in self.control_points.windows(2) {
+            if points[0].0.x <= time && points[1].0.x > time {
+                before = points[0].0;
+                after = points[1].0;
+            }
+        }
+
+        let range = after.x - before.x;
+        let pos = time - before.x;
+
+        let ratio = pos / range;
+
+        let x = time;
+        let y = before.y * (1.0 - ratio) + after.y * ratio;
+
+        self.current_point = Pos2::new(x, y);
+
+        1.0 - y / 100.0
     }
 }

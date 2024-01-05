@@ -40,13 +40,39 @@ pub struct DmxDevice {
     name: String,
     cycle_length: f32,
     timelines: Vec<Timeline>,
+
     values: Vec<u8>,
     #[serde(skip)]
     time: f32,
 }
 
 impl DmxDevice {
-    pub fn update(&mut self, ui: &mut Ui, index: usize, dmx_message: &mut DmxMessage, dt: f32) {
+    pub fn update(&mut self, dmx_message: &mut DmxMessage, dt: f32) {
+        let speed = 1000.0 / self.cycle_length;
+
+        self.time += speed * dt;
+
+        if self.time > 1000.0 {
+            self.time = 0.0;
+        }
+
+        for (index, value) in &mut self.values.iter_mut().enumerate() {
+            let timeline = &mut self.timelines[index];
+
+            if timeline.red.enabled {
+                *value = (timeline.red.update(self.time + timeline.offset) * timeline.gain * 255.0)
+                    as u8;
+            }
+        }
+
+        if self.enabled && self.size as usize == self.values.len() {
+            for i in 0..self.size {
+                dmx_message.buffer[(self.adress + i) as usize] = self.values[i as usize];
+            }
+        }
+    }
+
+    pub fn gui(&mut self, ui: &mut Ui, index: usize, dt: f32) {
         let speed = 1000.0 / self.cycle_length;
 
         self.time += speed * dt;
@@ -108,35 +134,44 @@ impl DmxDevice {
                         }
                     });
 
-                    CollapsingHeader::new(format!("{}: Timeline", index + 1))
-                        .default_open(false)
-                        .show(ui, |ui| {
-                            let timeline = &mut self.timelines[index];
-                            ui.horizontal(|ui| {
-                                ui.label("Gain");
-                                DragValue::new(&mut timeline.gain)
-                                    .clamp_range(0.0..=1.0)
-                                    .speed(0.01)
-                                    .ui(ui);
-                                ui.label("Offset");
-                                DragValue::new(&mut timeline.offset)
-                                    .clamp_range(0.0..=1000.0)
-                                    .speed(1.0)
-                                    .ui(ui);
+                    let timeline = &mut self.timelines[index];
+                    CollapsingHeader::new(format!(
+                        "{}: Timeline ({})",
+                        index + 1,
+                        if timeline.red.enabled {
+                            "Enabled"
+                        } else {
+                            "Disabled"
+                        }
+                    ))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(if timeline.red.enabled {
+                                "Enabled"
+                            } else {
+                                "Disabled"
                             });
+                            if ui.button("Toggle").clicked() {
+                                timeline.red.enabled = !timeline.red.enabled;
+                            }
 
-                            *value = (timeline.red.ui(ui, self.time + timeline.offset)
-                                * timeline.gain
-                                * 255.0) as u8;
-                            ui.add(egui::Separator::default());
+                            ui.label("Gain");
+                            DragValue::new(&mut timeline.gain)
+                                .clamp_range(0.0..=1.0)
+                                .speed(0.01)
+                                .ui(ui);
+                            ui.label("Offset");
+                            DragValue::new(&mut timeline.offset)
+                                .clamp_range(0.0..=1000.0)
+                                .speed(1.0)
+                                .ui(ui);
                         });
+
+                        timeline.red.ui(ui);
+                        ui.add(egui::Separator::default());
+                    });
                 }
             });
-
-        if self.enabled && self.size as usize == self.values.len() {
-            for i in 0..self.size {
-                dmx_message.buffer[(self.adress + i) as usize] = self.values[i as usize];
-            }
-        }
     }
 }

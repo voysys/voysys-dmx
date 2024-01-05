@@ -117,6 +117,22 @@ impl eframe::App for App {
             dt
         };
 
+        // Update
+        {
+            let mut res = DmxMessage {
+                buffer: vec![0u8; 512],
+            };
+
+            for device in &mut self.state.devices {
+                device.update(&mut res, dt);
+            }
+
+            while let Some(_event) = self.ws_receiver.try_recv() {}
+
+            self.ws_sender
+                .send(WsMessage::Text(serde_json::to_string(&res).unwrap()));
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -137,18 +153,9 @@ impl eframe::App for App {
                     }
                 });
 
-                let mut res = DmxMessage {
-                    buffer: vec![0u8; 512],
-                };
-
                 for (index, device) in self.state.devices.iter_mut().enumerate() {
-                    device.update(ui, index, &mut res, dt);
+                    device.gui(ui, index, dt);
                 }
-
-                while let Some(_event) = self.ws_receiver.try_recv() {}
-
-                self.ws_sender
-                    .send(WsMessage::Text(serde_json::to_string(&res).unwrap()));
             });
         });
     }
