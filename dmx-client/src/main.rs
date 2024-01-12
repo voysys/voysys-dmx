@@ -15,6 +15,8 @@ use web_time::Instant;
 
 mod channel;
 mod dmx_device;
+mod dmx_gui;
+mod timeline;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
@@ -141,25 +143,39 @@ impl eframe::App for App {
             .default_width(200.0)
             .width_range(80.0..=250.0)
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        if ui.button("Enable All").clicked() {
-                            for device in &mut self.state.devices {
-                                device.enabled = true;
+                egui::TopBottomPanel::top("left_panel")
+                    .resizable(false)
+                    .min_height(64.0)
+                    .show_inside(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("Enable All").clicked() {
+                                for device in &mut self.state.devices {
+                                    device.enabled = true;
+                                }
                             }
-                        }
 
-                        if ui.button("Disable All").clicked() {
-                            for device in &mut self.state.devices {
-                                device.enabled = false;
+                            if ui.button("Disable All").clicked() {
+                                for device in &mut self.state.devices {
+                                    device.enabled = false;
+                                }
                             }
-                        }
+                        });
+
+                        ui.menu_button("Add Device", |ui| {
+                            if ui.button("Generic").clicked() {
+                                self.state
+                                    .devices
+                                    .push(DmxDevice::new(dmx_device::DmxDeviceType::Generic));
+                            }
+                            if ui.button("Hero S").clicked() {}
+                            if ui.button("Show Bar Tri").clicked() {}
+                            if ui.button("5 Px Hex").clicked() {}
+                            if ui.button("Af 250 Smoke").clicked() {}
+                        });
+                        //self.state.devices.push(DmxDevice::default());
                     });
 
-                    if ui.button("Add DMX Device").clicked() {
-                        self.state.devices.push(DmxDevice::default());
-                    }
-
+                egui::ScrollArea::vertical().show(ui, |ui| {
                     for (index, device) in self.state.devices.iter_mut().enumerate() {
                         ui.selectable_value(&mut self.selected_device, index as i32, &device.name);
                     }
