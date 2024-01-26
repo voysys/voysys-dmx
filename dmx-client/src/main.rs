@@ -164,21 +164,25 @@ impl eframe::App for App {
                         });
 
                         ui.menu_button("Add Device", |ui| {
-                            if ui.button("Generic").clicked() {
-                                self.state
-                                    .devices
-                                    .push(DmxDevice::new(dmx_device::DmxDeviceType::Generic));
-                            }
-                            if ui.button("Hero S").clicked() {}
-                            if ui.button("Show Bar Tri").clicked() {}
-                            if ui.button("5 Px Hex").clicked() {}
-                            if ui.button("Af 250 Smoke").clicked() {
-                                self.state
-                                    .devices
-                                    .push(DmxDevice::new(dmx_device::DmxDeviceType::Af250))
+                            let device = if ui.button("Generic").clicked() {
+                                Some(dmx_device::DmxDeviceType::Generic)
+                            } else if ui.button("Hero S").clicked() {
+                                Some(dmx_device::DmxDeviceType::HeroSpot90)
+                            } else if ui.button("Show Bar Tri").clicked() {
+                                Some(dmx_device::DmxDeviceType::ShowBarTri)
+                            } else if ui.button("5 Px Hex").clicked() {
+                                Some(dmx_device::DmxDeviceType::Generic)
+                            } else if ui.button("Af 250 Smoke").clicked() {
+                                Some(dmx_device::DmxDeviceType::Af250)
+                            } else {
+                                None
+                            };
+
+                            if let Some(device_type) = device {
+                                ui.close_menu();
+                                self.state.devices.push(DmxDevice::new(device_type));
                             }
                         });
-                        //self.state.devices.push(DmxDevice::default());
                     });
 
                 egui::ScrollArea::vertical().show(ui, |ui| {

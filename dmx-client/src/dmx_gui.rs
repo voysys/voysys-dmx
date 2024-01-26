@@ -7,8 +7,8 @@ use eframe::{
 pub fn generic_gui(
     ui: &mut Ui,
     cycle_length: &mut f32,
-    values: &mut Vec<u8>,
-    timelines: &mut Vec<Timeline>,
+    values: &mut [u8],
+    timelines: &mut [Timeline],
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.horizontal(|ui| {
