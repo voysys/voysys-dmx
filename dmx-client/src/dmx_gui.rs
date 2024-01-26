@@ -1,7 +1,7 @@
 use crate::timeline::Timeline;
 use eframe::{
     egui::Ui,
-    egui::{self, CollapsingHeader, DragValue, Widget},
+    egui::{self, CollapsingHeader, DragValue, Slider, SliderOrientation, Widget},
 };
 
 pub fn generic_gui(
@@ -71,16 +71,30 @@ pub fn generic_gui(
     });
 }
 
-pub fn generic_smoke(
-    ui: &mut Ui,
-    cycle_length: &mut f32,
-    values: &mut Vec<u8>,
-    timelines: &mut Vec<Timeline>,
-) {
+pub fn smoke(ui: &mut Ui, values: &mut Vec<u8>, enabled: &mut bool) {
     egui::ScrollArea::vertical().show(ui, |ui| {
+        if values.is_empty() {
+            return;
+        }
         ui.horizontal(|ui| {
-            ui.label("Cycle");
-            DragValue::new(cycle_length).speed(0.01).ui(ui);
+            if ui.button("Deploy Smoke").is_pointer_button_down_on() {
+                *enabled = true;
+            } else {
+                *enabled = false;
+            }
+
+            let mut value = ((values[0] as f32 / 255.0) * 100.0) as i32;
+
+            ui.add(
+                Slider::new(&mut value, 0..=100)
+                    .clamp_to_range(true)
+                    .orientation(SliderOrientation::Horizontal)
+                    .text("Amount")
+                    .step_by(1.0)
+                    .suffix("%"),
+            );
+
+            values[0] = ((value as f32 / 100.0) * 255.0).clamp(0.0, 255.0) as u8;
         });
     });
 }

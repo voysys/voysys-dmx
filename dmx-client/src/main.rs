@@ -150,7 +150,9 @@ impl eframe::App for App {
                         ui.horizontal(|ui| {
                             if ui.button("Enable All").clicked() {
                                 for device in &mut self.state.devices {
-                                    device.enabled = true;
+                                    if device.dmx_type != dmx_device::DmxDeviceType::Af250 {
+                                        device.enabled = true;
+                                    }
                                 }
                             }
 
@@ -170,7 +172,11 @@ impl eframe::App for App {
                             if ui.button("Hero S").clicked() {}
                             if ui.button("Show Bar Tri").clicked() {}
                             if ui.button("5 Px Hex").clicked() {}
-                            if ui.button("Af 250 Smoke").clicked() {}
+                            if ui.button("Af 250 Smoke").clicked() {
+                                self.state
+                                    .devices
+                                    .push(DmxDevice::new(dmx_device::DmxDeviceType::Af250))
+                            }
                         });
                         //self.state.devices.push(DmxDevice::default());
                     });
@@ -185,38 +191,12 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.selected_device >= 0 {
                 let device = &mut self.state.devices[self.selected_device as usize];
-                if device.gui(ui, dt) {
+                if device.gui(ui) {
                     self.state.devices.remove(self.selected_device as usize);
                     self.selected_device = -1;
                 }
             }
         });
-
-        /*egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Add DMX Device").clicked() {
-                        self.state.devices.push(DmxDevice::default());
-                    }
-
-                    if ui.button("Enable All").clicked() {
-                        for device in &mut self.state.devices {
-                            device.enabled = true;
-                        }
-                    }
-
-                    if ui.button("Disable All").clicked() {
-                        for device in &mut self.state.devices {
-                            device.enabled = false;
-                        }
-                    }
-                });
-
-                for (index, device) in self.state.devices.iter_mut().enumerate() {
-                    device.gui(ui, index, dt);
-                }
-            });
-        });*/
     }
 
     fn save(&mut self, _storage: &mut dyn Storage) {

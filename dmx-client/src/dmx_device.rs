@@ -14,7 +14,7 @@ struct DmxAddress {
     size: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum DmxDeviceType {
     Generic,
     HeroSpot90,
@@ -45,7 +45,7 @@ pub struct DmxDevice {
     values: Vec<u8>,
     #[serde(skip)]
     time: f32,
-    dmx_type: DmxDeviceType,
+    pub dmx_type: DmxDeviceType,
 }
 
 impl Default for DmxDevice {
@@ -65,13 +65,25 @@ impl Default for DmxDevice {
 
 impl DmxDevice {
     pub fn new(dmx_type: DmxDeviceType) -> DmxDevice {
+        let (dmx_addres, values, timelines) = match dmx_type {
+            DmxDeviceType::Generic => (DmxAddress::default(), Vec::new(), Vec::new()),
+            DmxDeviceType::HeroSpot90 => (DmxAddress::default(), Vec::new(), Vec::new()),
+            DmxDeviceType::ShowBarTri => (DmxAddress::default(), Vec::new(), Vec::new()),
+            DmxDeviceType::PxHex5 => (DmxAddress::default(), Vec::new(), Vec::new()),
+            DmxDeviceType::Af250 => (
+                DmxAddress { adress: 0, size: 1 },
+                vec![0; 1],
+                vec![Timeline::new(); 1],
+            ),
+        };
+
         DmxDevice {
             enabled: false,
-            dmx_addres: DmxAddress::default(),
+            dmx_addres,
             name: dmx_type.name().to_string(),
             cycle_length: 10.0,
-            timelines: Vec::new(),
-            values: Vec::new(),
+            timelines,
+            values,
             time: 0.0,
             dmx_type,
         }
@@ -103,7 +115,7 @@ impl DmxDevice {
         }
     }
 
-    pub fn gui(&mut self, ui: &mut Ui, dt: f32) -> bool {
+    pub fn gui(&mut self, ui: &mut Ui) -> bool {
         let mut delete = false;
         egui::TopBottomPanel::top("top_dmx_panel")
             .resizable(false)
@@ -125,23 +137,25 @@ impl DmxDevice {
                         .speed(1.0)
                         .ui(ui);
                     self.dmx_addres.adress = address - 1;
-
-                    ui.label("Size:");
-                    if DragValue::new(&mut self.dmx_addres.size)
-                        .clamp_range(0..=512)
-                        .speed(1.0)
-                        .ui(ui)
-                        .changed()
-                    {
-                        self.values.resize(self.dmx_addres.size as usize, 0);
-                        self.timelines
-                            .resize(self.dmx_addres.size as usize, Timeline::new(0));
+                    if self.dmx_type == DmxDeviceType::Generic {
+                        ui.label("Size:");
+                        if DragValue::new(&mut self.dmx_addres.size)
+                            .clamp_range(0..=512)
+                            .speed(1.0)
+                            .ui(ui)
+                            .changed()
+                        {
+                            self.values.resize(self.dmx_addres.size as usize, 0);
+                            self.timelines
+                                .resize(self.dmx_addres.size as usize, Timeline::new());
+                        }
                     }
                 });
 
-                if ui
-                    .button(if self.enabled { "Enabled" } else { "Disabled" })
-                    .clicked()
+                if self.dmx_type != DmxDeviceType::Af250
+                    && ui
+                        .button(if self.enabled { "Enabled" } else { "Disabled" })
+                        .clicked()
                 {
                     self.enabled = !self.enabled;
                 }
@@ -158,7 +172,7 @@ impl DmxDevice {
                 DmxDeviceType::HeroSpot90 => (),
                 DmxDeviceType::ShowBarTri => (),
                 DmxDeviceType::PxHex5 => (),
-                DmxDeviceType::Af250 => (),
+                DmxDeviceType::Af250 => dmx_gui::smoke(ui, &mut self.values, &mut self.enabled),
             };
         });
 
