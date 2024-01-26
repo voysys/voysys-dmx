@@ -77,11 +77,7 @@ pub fn smoke(ui: &mut Ui, values: &mut Vec<u8>, enabled: &mut bool) {
             return;
         }
         ui.horizontal(|ui| {
-            if ui.button("Deploy Smoke").is_pointer_button_down_on() {
-                *enabled = true;
-            } else {
-                *enabled = false;
-            }
+            *enabled = ui.button("Deploy Smoke").is_pointer_button_down_on();
 
             let mut value = ((values[0] as f32 / 255.0) * 100.0) as i32;
 
