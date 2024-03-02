@@ -1,4 +1,4 @@
-use dmx_device::DmxDevice;
+use dmx_device::{px_hex_5::PxHex5, DmxDevice};
 use dmx_shared::DmxMessage;
 use eframe::{
     egui::{self},
@@ -6,7 +6,7 @@ use eframe::{
 };
 use ewebsock::{WsMessage, WsReceiver, WsSender};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::{fs, thread::sleep, time::Duration};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -97,7 +97,7 @@ struct App {
 
 impl App {
     fn new(state: State) -> Self {
-        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.4:33333").unwrap();
+        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.3:33333").unwrap();
 
         Self {
             ws_sender,
@@ -112,6 +112,15 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint();
+
+        // go down to 30 fps
+        {
+            if self.last_frame_time.elapsed().as_millis() < 33 {
+                sleep(Duration::from_millis(
+                    (33 - self.last_frame_time.elapsed().as_millis()).max(0) as u64,
+                ));
+            }
+        }
 
         let dt = {
             let new_time = Instant::now();
@@ -171,7 +180,7 @@ impl eframe::App for App {
                             } else if ui.button("Show Bar Tri").clicked() {
                                 Some(dmx_device::DmxDeviceType::ShowBarTri)
                             } else if ui.button("5 Px Hex").clicked() {
-                                Some(dmx_device::DmxDeviceType::Generic)
+                                Some(dmx_device::DmxDeviceType::PxHex5(PxHex5::default()))
                             } else if ui.button("Af 250 Smoke").clicked() {
                                 Some(dmx_device::DmxDeviceType::Af250)
                             } else {

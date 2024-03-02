@@ -5,7 +5,13 @@ use eframe::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{dmx_gui, timeline::Timeline};
+use crate::{
+    dmx_gui::{self},
+    timeline::Timeline,
+};
+use px_hex_5::PxHex5;
+
+pub mod px_hex_5;
 
 #[derive(Serialize, Deserialize, Default)]
 
@@ -19,7 +25,7 @@ pub enum DmxDeviceType {
     Generic,
     HeroSpot90,
     ShowBarTri,
-    PxHex5,
+    PxHex5(PxHex5),
     Af250,
 }
 
@@ -29,7 +35,7 @@ impl DmxDeviceType {
             DmxDeviceType::Generic => "Generic",
             DmxDeviceType::HeroSpot90 => "Hero S",
             DmxDeviceType::ShowBarTri => "Show Bar Tri",
-            DmxDeviceType::PxHex5 => "5 Px Hex",
+            DmxDeviceType::PxHex5(_) => "5 Px Hex",
             DmxDeviceType::Af250 => "Af 250 Smoke",
         }
     }
@@ -67,9 +73,27 @@ impl DmxDevice {
     pub fn new(dmx_type: DmxDeviceType) -> DmxDevice {
         let (dmx_addres, values, timelines) = match dmx_type {
             DmxDeviceType::Generic => (DmxAddress::default(), Vec::new(), Vec::new()),
-            DmxDeviceType::HeroSpot90 => (DmxAddress::default(), Vec::new(), Vec::new()),
-            DmxDeviceType::ShowBarTri => (DmxAddress::default(), Vec::new(), Vec::new()),
-            DmxDeviceType::PxHex5 => (DmxAddress::default(), Vec::new(), Vec::new()),
+            DmxDeviceType::HeroSpot90 => (
+                DmxAddress {
+                    adress: 0,
+                    size: 16,
+                },
+                vec![0; 16],
+                vec![Timeline::new(); 16],
+            ),
+            DmxDeviceType::ShowBarTri => (
+                DmxAddress { adress: 0, size: 3 },
+                vec![0; 3],
+                vec![Timeline::new(); 3],
+            ),
+            DmxDeviceType::PxHex5(_) => (
+                DmxAddress {
+                    adress: 0,
+                    size: 12,
+                },
+                vec![0; 12],
+                vec![Timeline::new(); 12],
+            ),
             DmxDeviceType::Af250 => (
                 DmxAddress { adress: 0, size: 1 },
                 vec![0; 1],
@@ -171,7 +195,9 @@ impl DmxDevice {
                 ),
                 DmxDeviceType::HeroSpot90 => (),
                 DmxDeviceType::ShowBarTri => (),
-                DmxDeviceType::PxHex5 => (),
+                DmxDeviceType::PxHex5(inner_data) => {
+                    dmx_gui::px_hex(ui, &mut self.values, inner_data)
+                }
                 DmxDeviceType::Af250 => dmx_gui::smoke(ui, &mut self.values, &mut self.enabled),
             };
         });
