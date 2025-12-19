@@ -97,7 +97,7 @@ struct App {
 
 impl App {
     fn new(state: State) -> Self {
-        let (ws_sender, ws_receiver) = ewebsock::connect("ws://10.0.11.3:33333").unwrap();
+        let (ws_sender, ws_receiver) = ewebsock::connect("ws://127.0.0.1:33333").unwrap();
 
         Self {
             ws_sender,
